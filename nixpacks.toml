@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "playwright-driver-chromium"]
+nixPkgs = ["python311"]
 
 [phases.install]
 cmds = [
