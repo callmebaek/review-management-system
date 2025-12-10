@@ -1,0 +1,25 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-dotenv==1.0.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Google Business Profile
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.116.0
+
+# OpenAI
+openai==1.10.0
+
+# Naver Place Automation (Stage 2)
+playwright==1.40.0
+
+# Utilities
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# MongoDB
+pymongo==4.6.1
+
