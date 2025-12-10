@@ -1,10 +1,10 @@
-# 더 완전한 Python 베이스 이미지 사용
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+# Python 베이스 이미지
+FROM python:3.11-slim
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# Python 패키지 설치
+# Python 패키지 설치 (Playwright 제외)
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
