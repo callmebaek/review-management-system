@@ -14,5 +14,5 @@ COPY backend /app
 # 포트 설정
 EXPOSE 8000
 
-# 서버 시작
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 서버 시작 (Render의 동적 PORT 환경 변수 사용)
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
