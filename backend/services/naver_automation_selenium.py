@@ -46,6 +46,27 @@ class NaverPlaceAutomationSelenium:
         # Structure: { place_id: { 'status': str, 'count': int, 'message': str, 'timestamp': datetime } }
         self._loading_progress: Dict[str, Dict] = {}
     
+    def _load_session_from_mongodb(self, user_id="default"):
+        """Load session from MongoDB (cloud storage)"""
+        try:
+            if not settings.use_mongodb or not settings.mongodb_url:
+                return None
+            
+            from utils.db import get_db
+            db = get_db()
+            if db is None:
+                return None
+            
+            session = db.naver_sessions.find_one({"_id": user_id})
+            if session and session.get('cookies'):
+                print(f"📦 Found session in MongoDB ({len(session['cookies'])} cookies)")
+                return session['cookies']
+            
+            return None
+        except Exception as e:
+            logger.error(f"❌ MongoDB session load error: {e}")
+            return None
+    
     def _create_driver(self, headless=True):
         """Create and configure Chrome WebDriver"""
         print("🌐 Creating Chrome WebDriver...")
@@ -67,19 +88,29 @@ class NaverPlaceAutomationSelenium:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        # Load session if exists
-        if os.path.exists(self.session_file):
-            logger.info("📂 Loading saved session...")
-            print("📂 Loading saved session cookies...")
+        # Try to load session (MongoDB first, then local file)
+        cookies = None
+        
+        # Priority 1: Try MongoDB (cloud storage)
+        cookies = self._load_session_from_mongodb()
+        if cookies:
+            print("✅ Using session from MongoDB (cloud)")
+        # Priority 2: Try local file (fallback)
+        elif os.path.exists(self.session_file):
+            print("📂 Using session from local file")
+            with open(self.session_file, 'r', encoding='utf-8') as f:
+                cookies = json.load(f)
+        
+        # Load cookies if found
+        if cookies:
+            logger.info(f"📂 Loading saved session ({len(cookies)} cookies)...")
+            print(f"📂 Loading {len(cookies)} cookies...")
             
             # Step 1: Navigate to Naver domain first
             driver.get('https://www.naver.com')
             time.sleep(1)
             
             # Step 2: Load and add all cookies
-            with open(self.session_file, 'r', encoding='utf-8') as f:
-                cookies = json.load(f)
-            
             cookies_added = 0
             for cookie in cookies:
                 try:

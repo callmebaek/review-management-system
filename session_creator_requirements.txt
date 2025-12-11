@@ -1,0 +1,15 @@
+# 네이버 세션 생성기 전용 패키지
+
+# GUI
+tkinter  # 내장 모듈이지만 명시
+
+# 웹 자동화
+selenium==4.16.0
+webdriver-manager==4.0.1
+
+# HTTP 요청
+requests==2.31.0
+
+# EXE 변환 (개발용)
+pyinstaller==6.3.0
+

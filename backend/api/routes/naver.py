@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 from config import settings
+from datetime import datetime, timedelta
+import json
 
 router = APIRouter()
 
@@ -24,6 +26,12 @@ class NaverReplyRequest(BaseModel):
     place_id: str
     review_id: str
     reply_text: str
+
+
+class NaverSessionUpload(BaseModel):
+    cookies: List[Dict]
+    user_id: Optional[str] = "default"
+    username: Optional[str] = None
 
 
 @router.post("/login")
@@ -117,6 +125,166 @@ async def naver_logout():
     Logout from Naver and clear session
     """
     return await naver_service.logout()
+
+
+@router.post("/session/upload")
+async def upload_session(session_data: NaverSessionUpload):
+    """
+    Upload Naver session from external tool (EXE)
+    
+    This endpoint receives session cookies from the desktop tool
+    and stores them in MongoDB for cloud usage.
+    """
+    try:
+        from utils.db import get_db
+        
+        # Validate cookies
+        if not session_data.cookies or len(session_data.cookies) == 0:
+            raise HTTPException(status_code=400, detail="No cookies provided")
+        
+        # Check if MongoDB is available
+        if not settings.use_mongodb or not settings.mongodb_url:
+            raise HTTPException(
+                status_code=500, 
+                detail="MongoDB not configured. Session upload requires MongoDB."
+            )
+        
+        db = get_db()
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Prepare session document
+        session_doc = {
+            "_id": session_data.user_id,
+            "username": session_data.username,
+            "cookies": session_data.cookies,
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(days=7),  # 7 days validity
+            "last_used": datetime.utcnow(),
+            "status": "active",
+            "cookie_count": len(session_data.cookies)
+        }
+        
+        # Upsert to MongoDB
+        db.naver_sessions.replace_one(
+            {"_id": session_data.user_id},
+            session_doc,
+            upsert=True
+        )
+        
+        print(f"✅ Session uploaded for user: {session_data.user_id}")
+        
+        return {
+            "success": True,
+            "message": "Session uploaded successfully",
+            "session_info": {
+                "user_id": session_data.user_id,
+                "username": session_data.username,
+                "cookie_count": len(session_data.cookies),
+                "expires_at": session_doc["expires_at"].isoformat(),
+                "valid_days": 7
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Session upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Session upload failed: {str(e)}")
+
+
+@router.get("/session/status")
+async def get_session_status(user_id: str = "default"):
+    """
+    Get current session status from MongoDB
+    """
+    try:
+        from utils.db import get_db
+        
+        if not settings.use_mongodb or not settings.mongodb_url:
+            return {
+                "exists": False,
+                "message": "MongoDB not configured"
+            }
+        
+        db = get_db()
+        if db is None:
+            return {
+                "exists": False,
+                "message": "Database connection failed"
+            }
+        
+        # Find session in MongoDB
+        session = db.naver_sessions.find_one({"_id": user_id})
+        
+        if not session:
+            return {
+                "exists": False,
+                "message": "No session found"
+            }
+        
+        # Check if expired
+        now = datetime.utcnow()
+        expires_at = session.get("expires_at")
+        
+        is_expired = False
+        if expires_at and now > expires_at:
+            is_expired = True
+        
+        # Calculate remaining time
+        remaining_days = 0
+        if expires_at and not is_expired:
+            remaining_days = (expires_at - now).days
+        
+        return {
+            "exists": True,
+            "username": session.get("username"),
+            "created_at": session.get("created_at").isoformat() if session.get("created_at") else None,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "last_used": session.get("last_used").isoformat() if session.get("last_used") else None,
+            "cookie_count": session.get("cookie_count", 0),
+            "is_expired": is_expired,
+            "remaining_days": remaining_days,
+            "status": "expired" if is_expired else "active"
+        }
+        
+    except Exception as e:
+        print(f"❌ Session status error: {str(e)}")
+        return {
+            "exists": False,
+            "message": f"Error: {str(e)}"
+        }
+
+
+@router.delete("/session")
+async def delete_session(user_id: str = "default"):
+    """
+    Delete session from MongoDB
+    """
+    try:
+        from utils.db import get_db
+        
+        if not settings.use_mongodb or not settings.mongodb_url:
+            raise HTTPException(status_code=500, detail="MongoDB not configured")
+        
+        db = get_db()
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        result = db.naver_sessions.delete_one({"_id": user_id})
+        
+        if result.deleted_count > 0:
+            return {
+                "success": True,
+                "message": "Session deleted successfully"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No session found to delete"
+            }
+            
+    except Exception as e:
+        print(f"❌ Session delete error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Session delete failed: {str(e)}")
 
 
 
