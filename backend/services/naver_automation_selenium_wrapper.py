@@ -2,6 +2,7 @@
 Async wrapper for Selenium Naver automation
 """
 import asyncio
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from services.naver_automation_selenium import naver_automation_selenium
 from typing import Dict, List
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 # Thread executor
 executor = ThreadPoolExecutor(max_workers=1)  # Reduced to 1 to prevent concurrent browser sessions
 
-# Semaphore to ensure only one Selenium operation at a time
-_selenium_lock = asyncio.Lock()
+# 🚀 threading.Lock으로 변경 (event loop 문제 해결)
+_selenium_lock = threading.Lock()
 
 
 class NaverAutomationSeleniumWrapper:
@@ -28,7 +29,7 @@ class NaverAutomationSeleniumWrapper:
     
     async def login(self, username: str, password: str) -> Dict:
         """Async wrapper for login"""
-        async with _selenium_lock:  # Ensure only one browser operation at a time
+        with _selenium_lock:  # threading.Lock 사용
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 executor,
@@ -47,7 +48,7 @@ class NaverAutomationSeleniumWrapper:
     
     async def get_places(self) -> List[Dict]:
         """Async wrapper for get_places"""
-        async with _selenium_lock:  # Ensure only one browser operation at a time
+        with _selenium_lock:  # threading.Lock 사용
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 executor,
@@ -56,7 +57,7 @@ class NaverAutomationSeleniumWrapper:
     
     async def get_reviews(self, place_id: str, page: int = 1, page_size: int = 20, filter_type: str = 'all', load_count: int = 300) -> List[Dict]:
         """Async wrapper for get_reviews (user-specified load count)"""
-        async with _selenium_lock:  # Ensure only one browser operation at a time
+        with _selenium_lock:  # threading.Lock 사용
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 executor,
@@ -70,7 +71,7 @@ class NaverAutomationSeleniumWrapper:
     
     async def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Async wrapper for post_reply"""
-        async with _selenium_lock:  # Ensure only one browser operation at a time
+        with _selenium_lock:  # threading.Lock 사용
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 executor,
@@ -91,7 +92,7 @@ class NaverAutomationSeleniumWrapper:
     
     async def logout(self) -> Dict:
         """Async wrapper for logout"""
-        async with _selenium_lock:  # Ensure only one browser operation at a time
+        with _selenium_lock:  # threading.Lock 사용
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(
                 executor,

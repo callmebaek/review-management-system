@@ -369,17 +369,13 @@ export default function Reviews() {
                 setHasSelectedCount(true)
                 setShowLoadCountModal(false)
                 
-                // 🚀 100개 이상은 자동으로 비동기 모드 사용
-                if (selectedLoadCount >= 100) {
-                  startAsyncLoading()
-                }
+                // 🚀 모든 로딩을 비동기로 (타임아웃 방지)
+                startAsyncLoading()
               }}
               className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
             >
               {selectedLoadCount === 9999 ? '전체' : selectedLoadCount + '개'} 리뷰 불러오기 →
-              {selectedLoadCount >= 100 && (
-                <span className="text-xs ml-2">(비동기 모드)</span>
-              )}
+              <span className="text-xs ml-2">(안전한 비동기 모드)</span>
             </button>
           </div>
         </div>

@@ -151,37 +151,34 @@ async def load_reviews_async(
     
     # Start background thread
     def background_load():
-        import asyncio
-        
-        async def async_load_task():
-            try:
-                # Update status to processing
-                task_manager.update_task_status(task_id, 'processing')
-                
-                # Set active user
-                naver_service.set_active_user(user_id)
-                
-                # Load reviews (this can take minutes!)
-                result = await naver_service.get_reviews(
-                    place_id,
-                    page=1,
-                    page_size=20,
-                    filter_type='all',
-                    load_count=load_count
-                )
-                
-                # Store result
-                task_manager.set_result(task_id, result)
-                task_manager.update_task_status(task_id, 'completed')
-                
-            except Exception as e:
-                print(f"❌ Background task {task_id} failed: {e}")
-                import traceback
-                traceback.print_exc()
-                task_manager.set_error(task_id, str(e))
-        
-        # Run async function in new event loop
-        asyncio.run(async_load_task())
+        try:
+            # Update status to processing
+            task_manager.update_task_status(task_id, 'processing')
+            
+            # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
+            from services.naver_automation_selenium import naver_automation_selenium
+            
+            # Set active user
+            naver_automation_selenium.set_active_user(user_id)
+            
+            # Load reviews (sync 함수 직접 호출)
+            result = naver_automation_selenium.get_reviews(
+                place_id,
+                page=1,
+                page_size=20,
+                filter_type='all',
+                load_count=load_count
+            )
+            
+            # Store result
+            task_manager.set_result(task_id, result)
+            task_manager.update_task_status(task_id, 'completed')
+            
+        except Exception as e:
+            print(f"❌ Background task {task_id} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            task_manager.set_error(task_id, str(e))
     
     # Start thread
     thread = threading.Thread(target=background_load, daemon=True)
@@ -267,35 +264,32 @@ async def post_reply_async(
     
     # Start background thread
     def background_reply():
-        import asyncio
-        
-        async def async_reply_task():
-            try:
-                task_manager.update_task_status(task_id, 'processing')
-                task_manager.update_progress(task_id, 0, '답글 게시 중...')
-                
-                # Set active user
-                naver_service.set_active_user(user_id)
-                
-                # Post reply (this can take 30+ seconds!)
-                result = await naver_service.post_reply(
-                    place_id=place_id,
-                    review_id=review_id,
-                    reply_text=reply_text
-                )
-                
-                task_manager.set_result(task_id, result)
-                task_manager.update_task_status(task_id, 'completed')
-                task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
-                
-            except Exception as e:
-                print(f"❌ Background reply task {task_id} failed: {e}")
-                import traceback
-                traceback.print_exc()
-                task_manager.set_error(task_id, str(e))
-        
-        # Run async function in new event loop
-        asyncio.run(async_reply_task())
+        try:
+            task_manager.update_task_status(task_id, 'processing')
+            task_manager.update_progress(task_id, 0, '답글 게시 중...')
+            
+            # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
+            from services.naver_automation_selenium import naver_automation_selenium
+            
+            # Set active user
+            naver_automation_selenium.set_active_user(user_id)
+            
+            # Post reply (sync 함수 직접 호출)
+            result = naver_automation_selenium.post_reply(
+                place_id=place_id,
+                review_id=review_id,
+                reply_text=reply_text
+            )
+            
+            task_manager.set_result(task_id, result)
+            task_manager.update_task_status(task_id, 'completed')
+            task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
+            
+        except Exception as e:
+            print(f"❌ Background reply task {task_id} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            task_manager.set_error(task_id, str(e))
     
     thread = threading.Thread(target=background_reply, daemon=True)
     thread.start()
