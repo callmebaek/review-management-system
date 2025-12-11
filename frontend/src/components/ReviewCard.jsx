@@ -27,10 +27,13 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
       const response = await apiClient.get(`/api/naver/tasks/${replyTaskId}`)
       const task = response.data
       
+      console.log(`📊 Reply task status: ${task.status}, progress: ${task.progress?.message}`)
+      
       setReplyProgress(task)
       
-      // 완료되면 폴링 중지
+      // 🚀 KEEP posting true until completed or failed
       if (task.status === 'completed') {
+        console.log('✅ Reply task completed!')
         setPosting(false)
         setReplyTaskId(null)
         setShowReplyForm(false)
@@ -45,9 +48,16 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
           onReplyPosted()
         }
       } else if (task.status === 'failed') {
+        console.log('❌ Reply task failed:', task.error)
         setPosting(false)
         setReplyTaskId(null)
         setError(task.error || '답글 게시 실패')
+      } else {
+        // 🚀 진행 중이면 posting 유지
+        if (!posting) {
+          console.log('🔄 Setting posting to true (task in progress)')
+          setPosting(true)
+        }
       }
       
       return task
