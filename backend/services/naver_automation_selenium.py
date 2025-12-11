@@ -1035,6 +1035,100 @@ class NaverPlaceAutomationSelenium:
                 finally:
                     driver = None
     
+    def post_reply_by_author(self, place_id: str, author: str, date: str, reply_text: str) -> Dict:
+        """
+        작성자 이름으로 리뷰 찾아서 답글 게시 (더 안정적)
+        """
+        driver = None
+        try:
+            print(f"💬 Posting reply to review by: {author} ({date})")
+            logger.info(f"💬 Posting reply by author: {author}")
+            
+            driver = self._create_driver(headless=True)
+            
+            # Go to reviews page
+            reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
+            print(f"🔗 Opening: {reviews_url}")
+            driver.get(reviews_url)
+            time.sleep(2)
+            
+            # Handle popup
+            try:
+                popup_btn = driver.find_element(By.CSS_SELECTOR, "button.Modal_btn_confirm__uQZFR")
+                if popup_btn.is_displayed():
+                    driver.execute_script("arguments[0].click();", popup_btn)
+                    time.sleep(1)
+            except:
+                pass
+            
+            # 🚀 작성자 이름으로 리뷰 찾기
+            print(f"🔍 Finding review by author: {author}")
+            all_lis = driver.find_elements(By.TAG_NAME, "li")
+            
+            target_review = None
+            for li in all_lis:
+                try:
+                    li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                    if li_author == author:
+                        print(f"✅ Found review by author: {author}")
+                        target_review = li
+                        break
+                except:
+                    continue
+            
+            if not target_review:
+                raise Exception(f"Could not find review by author: {author}")
+            
+            # Scroll and post
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)
+            time.sleep(1)
+            
+            # Click reply button
+            reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
+            driver.execute_script("arguments[0].click();", reply_btn)
+            time.sleep(2)
+            
+            # Fill textarea
+            textarea = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+            )
+            textarea.click()
+            time.sleep(0.5)
+            textarea.send_keys(reply_text)
+            time.sleep(1)
+            
+            # Submit
+            submit_btns = driver.find_elements(By.XPATH, "//button[contains(., '등록')]")
+            if submit_btns:
+                driver.execute_script("arguments[0].click();", submit_btns[-1])
+                time.sleep(4)
+                
+            print(f"✅ Reply posted to {author}")
+            
+            return {
+                'success': True,
+                'message': f'Reply posted to {author}',
+                'author': author
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Error posting reply: {error_msg}")
+            logger.error(f"Error posting reply: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Error posting reply: {error_msg}")
+        
+        finally:
+            if driver:
+                try:
+                    print("🔄 Closing Chrome driver...")
+                    driver.quit()
+                    print("✅ Chrome driver closed")
+                    driver = None
+                except Exception as e:
+                    print(f"⚠️ Error closing driver: {e}")
+                finally:
+                    driver = None
+    
     def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Post a reply to a review in Smartplace Center"""
         driver = None

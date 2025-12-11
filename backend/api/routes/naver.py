@@ -244,6 +244,8 @@ async def post_reply_async(
     place_id: str = Body(...),
     review_id: str = Body(...),
     reply_text: str = Body(...),
+    author: str = Body(...),  # 추가: 작성자 이름
+    date: str = Body(...),    # 추가: 날짜
     user_id: str = Body("default")
 ):
     """
@@ -258,7 +260,9 @@ async def post_reply_async(
         params={
             'place_id': place_id,
             'review_id': review_id,
-            'reply_text': reply_text
+            'reply_text': reply_text,
+            'author': author,  # 작성자로 리뷰 찾기
+            'date': date       # 날짜로 추가 확인
         }
     )
     
@@ -274,10 +278,11 @@ async def post_reply_async(
             # Set active user
             naver_automation_selenium.set_active_user(user_id)
             
-            # Post reply (sync 함수 직접 호출)
-            result = naver_automation_selenium.post_reply(
+            # 🚀 작성자 이름으로 찾기 (더 안정적)
+            result = naver_automation_selenium.post_reply_by_author(
                 place_id=place_id,
-                review_id=review_id,
+                author=author,
+                date=date,
                 reply_text=reply_text
             )
             
