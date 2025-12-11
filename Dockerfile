@@ -1,23 +1,19 @@
-# Python 베이스 이미지
-FROM python:3.11-slim
+# Selenium 공식 이미지 (Chrome 포함)
+FROM selenium/standalone-chrome:latest
+
+# Python 설치
+USER root
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# Chrome 및 ChromeDriver 설치
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    unzip \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 패키지 설치 (Playwright 제외)
+# Python 패키지 설치
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY backend /app
@@ -25,5 +21,5 @@ COPY backend /app
 # 포트 설정
 EXPOSE 8000
 
-# 서버 시작 (Render의 동적 PORT 환경 변수 사용)
+# 서버 시작
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
