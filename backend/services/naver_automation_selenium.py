@@ -748,14 +748,14 @@ class NaverPlaceAutomationSelenium:
             
             print("⏳ Waiting for reviews page to load...")
             self._loading_progress[place_id]['message'] = '⏳ 페이지 로딩 중...'
-            time.sleep(2)
+            time.sleep(1)  # Reduced from 2 to 1
             
-            # Handle popup
+            # Handle popup (faster)
             try:
                 popup_btn = driver.find_element(By.CSS_SELECTOR, "button.Modal_btn_confirm__uQZFR")
                 if popup_btn.is_displayed():
                     driver.execute_script("arguments[0].click();", popup_btn)
-                    time.sleep(1)
+                    time.sleep(0.5)  # Reduced from 1 to 0.5
             except:
                 pass
             
@@ -779,13 +779,10 @@ class NaverPlaceAutomationSelenium:
             last_count = 0
             no_change = 0
             
-            # Adjust scroll attempts based on target
-            max_scrolls = 50 if TARGET_LOAD_COUNT <= 50 else \
-                         100 if TARGET_LOAD_COUNT <= 150 else \
-                         150 if TARGET_LOAD_COUNT <= 300 else \
-                         250 if TARGET_LOAD_COUNT <= 500 else \
-                         400 if TARGET_LOAD_COUNT <= 1000 else \
-                         800  # For "all" (9999)
+            # 🚀 AGGRESSIVE MEMORY OPTIMIZATION: Reduce scroll attempts
+            # For Heroku's limited memory, we prioritize speed over completeness
+            max_scrolls = min(30, TARGET_LOAD_COUNT // 2)  # Much more conservative
+            print(f"🎯 Max scrolls limited to: {max_scrolls} (memory optimization)")
             
             for i in range(max_scrolls):
                 try:
@@ -810,12 +807,14 @@ class NaverPlaceAutomationSelenium:
                     else:
                         no_change += 1
                     
+                    # 🚀 Early exit if we have enough reviews
                     if current_count >= TARGET_LOAD_COUNT:
                         print(f"  ✅ Reached target {TARGET_LOAD_COUNT}!")
                         break
-                        
-                    if no_change >= 5:
-                        print("  ⚠️ No more content loading.")
+                    
+                    # 🚀 More aggressive early exit (3 attempts instead of 5)
+                    if no_change >= 3:
+                        print(f"  ⚠️ No more content loading (stopped at {current_count} reviews).")
                         break
                     
                     # 🚀 FIX: Use scrollIntoView on the LAST element
@@ -823,30 +822,36 @@ class NaverPlaceAutomationSelenium:
                         driver.execute_script("arguments[0].scrollIntoView(true);", lis[-1])
                     else:
                         driver.execute_script("window.scrollBy(0, 1000);")
-                        
-                    time.sleep(0.5)  # Wait for render
+                    
+                    # 🚀 CRITICAL: Reduce wait time (0.5 → 0.3 seconds)
+                    time.sleep(0.3)
                     
                 except Exception as e:
                     print(f"  ⚠️ Scroll error: {e}")
-                    break
+                    # Don't break immediately, try once more
+                    if no_change >= 2:
+                        break
+                    no_change += 1
             
-            # 🚀 STEP 4: Parse Data
-            print("🔍 Parsing reviews...")
+            # 🚀 STEP 4: Parse Data (FAST MODE for Heroku)
+            print(f"🔍 Parsing {last_count} reviews...")
             self._loading_progress[place_id]['message'] = f'📝 {last_count}개 리뷰 파싱 중...'
             all_reviews = []
             
-            # Get total count first
-            total_count = 0
-            try:
-                import re
-                txt = driver.find_element(By.TAG_NAME, 'body').text
-                m = re.search(r'전체\s*(\d+)', txt)
-                if m: total_count = int(m.group(1))
-            except: pass
+            # Get total count first (quick)
+            total_count = last_count  # Use loaded count as total
             
             lis = driver.find_elements(By.TAG_NAME, "li")
             
-            for li in lis:
+            # 🚀 MEMORY: Parse only what we need, skip rest
+            max_parse = min(len(lis), TARGET_LOAD_COUNT + 10)  # Parse a bit more than target
+            print(f"🎯 Parsing first {max_parse} elements (out of {len(lis)})")
+            
+            for idx, li in enumerate(lis):
+                if idx >= max_parse:
+                    break  # Stop parsing to save memory
+                
+                try:
                 try:
                     # Author
                     try:
@@ -1001,13 +1006,17 @@ class NaverPlaceAutomationSelenium:
             raise HTTPException(status_code=500, detail=f"리뷰 로드 실패: {error_msg}")
         
         finally:
+            # 🚀 CRITICAL: Close driver ASAP to free memory
             if driver:
                 try:
-                    print("🔄 Closing Chrome driver...")
+                    print("🔄 Closing Chrome driver immediately...")
                     driver.quit()
-                    print("✅ Chrome driver closed")
+                    print("✅ Chrome driver closed - memory freed")
+                    driver = None  # Help garbage collector
                 except Exception as e:
                     print(f"⚠️ Error closing driver: {e}")
+                finally:
+                    driver = None
     
     def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Post a reply to a review in Smartplace Center"""
