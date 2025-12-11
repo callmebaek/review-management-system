@@ -56,13 +56,14 @@ if os.getenv("VERCEL_URL"):
 # Vercel 정확한 URL 추가
 allowed_origins.append("https://review-management-system-ivory.vercel.app")
 
+print(f"🔧 CORS allowed_origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],  # 일단 모든 origin 허용 (테스트용)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Vercel 프리뷰 배포도 허용
 )
 
 
