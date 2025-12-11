@@ -74,21 +74,30 @@ export default function NaverLogin() {
   const switchSession = async (user_id) => {
     try {
       await apiClient.post(`/api/naver/session/switch?user_id=${user_id}`)
-      setActiveSession(user_id)
+      
+      // 🚀 STEP 1: localStorage 업데이트
       localStorage.setItem('active_naver_user', user_id)
+      console.log(`🔄 Switched to: ${user_id}`)
       
-      // 🚀 캐시 무효화: 이전 계정의 데이터 제거
-      queryClient.invalidateQueries(['naverPlaces'])
-      queryClient.invalidateQueries(['naverStatus'])
-      queryClient.removeQueries(['naver-reviews'])  // 모든 리뷰 캐시 제거
+      // 🚀 STEP 2: sessionStorage에 전환 플래그 설정
+      sessionStorage.setItem('account_switched', 'true')
+      sessionStorage.setItem('switched_to', user_id)
       
-      alert(`✅ ${user_id} 계정으로 전환되었습니다!\n\n해당 계정의 매장 목록으로 이동합니다.`)
+      // 🚀 STEP 3: 모든 캐시 완전 제거
+      queryClient.clear()  // 모든 캐시 제거
       
-      // 🚀 강제 새로고침으로 Dashboard 이동 (React Router 캐시 우회)
+      setActiveSession(user_id)
+      
+      alert(`✅ ${user_id} 계정으로 전환되었습니다!`)
+      
+      // 🚀 STEP 4: 완전한 페이지 새로고침으로 Dashboard 이동
       setTimeout(() => {
-        window.location.href = '/dashboard'
-      }, 500)
+        window.location.replace('/dashboard')
+        // 또는 더 확실하게:
+        // window.location.href = '/dashboard?_t=' + Date.now()
+      }, 300)
     } catch (err) {
+      console.error('Account switch error:', err)
       alert('계정 전환 중 오류가 발생했습니다')
     }
   }

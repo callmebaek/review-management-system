@@ -26,6 +26,29 @@ export default function Dashboard() {
       setTimeout(() => setShowNaverAuthSuccess(false), 3000)
     }
     
+    // 🚀 CRITICAL: 계정 전환 플래그 확인 (페이지 로드 시 최우선)
+    if (sessionStorage.getItem('account_switched') === 'true') {
+      const switchedTo = sessionStorage.getItem('switched_to')
+      console.log(`🔄 Account switch detected! Switching to: ${switchedTo}`)
+      
+      // 플래그 제거
+      sessionStorage.removeItem('account_switched')
+      sessionStorage.removeItem('switched_to')
+      
+      // localStorage 다시 읽기
+      const currentUser = localStorage.getItem('active_naver_user') || 'default'
+      console.log(`📦 Reading from localStorage: ${currentUser}`)
+      
+      // State 강제 업데이트
+      setActiveNaverUser(currentUser)
+      
+      // 모든 캐시 제거
+      queryClient.removeQueries({ queryKey: ['naverPlaces'] })
+      queryClient.removeQueries({ queryKey: ['naverStatus'] })
+      
+      console.log(`✅ State updated to: ${currentUser}, cache cleared`)
+    }
+    
     // 🚀 페이지가 보일 때마다 localStorage 다시 읽기
     const handleVisibilityChange = () => {
       if (!document.hidden) {
