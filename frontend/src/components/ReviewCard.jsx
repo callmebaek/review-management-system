@@ -123,20 +123,11 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
       
       // Update the review object in cache (optimistic)
       if (isNaver && placeId) {
-        queryClient.setQueryData(['naver-reviews', placeId], (oldData) => {
-          if (!oldData) return oldData
-          
-          const reviews = oldData.reviews || oldData
-          const updatedReviews = reviews.map(r => 
-            r.review_id === review.review_id 
-              ? { ...r, has_reply: true, reply: currentReplyText, reply_date: currentDate }
-              : r
-          )
-          
-          return oldData.reviews 
-            ? { ...oldData, reviews: updatedReviews }
-            : updatedReviews
-        })
+        // Get active user to match cache key
+        const activeUser = localStorage.getItem('active_naver_user') || 'default'
+        
+        // Invalidate all related caches (simpler and more reliable)
+        queryClient.invalidateQueries(['naver-reviews', placeId])
       }
       
       // Show success alert

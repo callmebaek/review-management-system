@@ -52,19 +52,19 @@ export default function Reviews() {
     }
   }, [platform, placeId, hasSelectedCount])
 
+  // Get active user for cache key
+  const activeNaverUser = localStorage.getItem('active_naver_user') || 'default'
+  
   // Fetch Naver reviews (User-specified load count)
   const { data: naverReviewsData, isLoading: naverLoading, error: naverError, refetch: refetchNaver } = useQuery({
-    queryKey: ['naver-reviews', placeId, naverPage, selectedLoadCount],
+    queryKey: ['naver-reviews', placeId, naverPage, selectedLoadCount, activeNaverUser],  // Include user_id in cache key
     queryFn: async () => {
-      // Get active user from localStorage (for multi-account support)
-      const activeUser = localStorage.getItem('active_naver_user') || 'default'
-      
       const response = await apiClient.get(`/api/naver/reviews/${placeId}`, {
         params: {
           page: naverPage,
           page_size: pageSize,
           load_count: selectedLoadCount,
-          user_id: activeUser
+          user_id: activeNaverUser
         }
       })
       return response.data

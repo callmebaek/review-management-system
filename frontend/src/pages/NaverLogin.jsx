@@ -17,6 +17,27 @@ export default function NaverLogin() {
   useEffect(() => {
     loadSessions()
   }, [])
+  
+  // 🚀 페이지가 보일 때마다 localStorage 동기화
+  useEffect(() => {
+    const syncActiveSession = () => {
+      const storedActiveUser = localStorage.getItem('active_naver_user')
+      if (storedActiveUser && storedActiveUser !== activeSession) {
+        console.log(`🔄 Syncing active session: ${activeSession} → ${storedActiveUser}`)
+        setActiveSession(storedActiveUser)
+      }
+    }
+    
+    // 페이지 포커스 시 동기화
+    window.addEventListener('focus', syncActiveSession)
+    
+    // 컴포넌트 마운트 시에도 한 번 실행
+    syncActiveSession()
+    
+    return () => {
+      window.removeEventListener('focus', syncActiveSession)
+    }
+  }, [activeSession])
 
   const loadSessions = async () => {
     try {
@@ -24,12 +45,21 @@ export default function NaverLogin() {
       const response = await apiClient.get('/api/naver/sessions/list', { timeout: 5000 })
       setSessions(response.data.sessions || [])
       
-      // Set first active session as default
+      // 🚀 localStorage에서 현재 활성 계정 읽기 (우선순위 1)
+      const storedActiveUser = localStorage.getItem('active_naver_user')
+      
       if (response.data.sessions && response.data.sessions.length > 0) {
-        const active = response.data.sessions.find(s => s.user_id === 'default') || response.data.sessions[0]
-        setActiveSession(active.user_id)
-        // Store in localStorage
-        localStorage.setItem('active_naver_user', active.user_id)
+        // 저장된 활성 계정이 있고, 세션 목록에 존재하면 사용
+        if (storedActiveUser && response.data.sessions.some(s => s.user_id === storedActiveUser)) {
+          console.log(`🔄 Using stored active user: ${storedActiveUser}`)
+          setActiveSession(storedActiveUser)
+        } else {
+          // 없으면 첫 번째 세션 사용
+          const active = response.data.sessions.find(s => s.user_id === 'default') || response.data.sessions[0]
+          console.log(`🔄 Setting default active user: ${active.user_id}`)
+          setActiveSession(active.user_id)
+          localStorage.setItem('active_naver_user', active.user_id)
+        }
       }
       
       setError(null)
@@ -52,12 +82,12 @@ export default function NaverLogin() {
       queryClient.invalidateQueries(['naverStatus'])
       queryClient.removeQueries(['naver-reviews'])  // 모든 리뷰 캐시 제거
       
-      alert(`✅ ${user_id} 계정으로 전환되었습니다!\n\n잠시 후 해당 계정의 매장 목록이 표시됩니다.`)
+      alert(`✅ ${user_id} 계정으로 전환되었습니다!\n\n해당 계정의 매장 목록으로 이동합니다.`)
       
-      // 전환 후 잠시 대기하고 Dashboard로 자동 이동
+      // 🚀 강제 새로고침으로 Dashboard 이동 (React Router 캐시 우회)
       setTimeout(() => {
-        navigate('/dashboard')
-      }, 1000)
+        window.location.href = '/dashboard'
+      }, 500)
     } catch (err) {
       alert('계정 전환 중 오류가 발생했습니다')
     }
