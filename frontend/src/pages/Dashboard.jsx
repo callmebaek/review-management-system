@@ -90,7 +90,10 @@ export default function Dashboard() {
     queryKey: ['naverPlaces'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get('/api/naver/places')
+        // Get active user from localStorage (for multi-account support)
+        const activeUser = localStorage.getItem('active_naver_user') || 'default'
+        
+        const response = await apiClient.get(`/api/naver/places?user_id=${activeUser}`)
         return response.data
       } catch (err) {
         console.error('Failed to fetch Naver places:', err)

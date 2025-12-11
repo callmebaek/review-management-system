@@ -56,11 +56,15 @@ export default function Reviews() {
   const { data: naverReviewsData, isLoading: naverLoading, error: naverError, refetch: refetchNaver } = useQuery({
     queryKey: ['naver-reviews', placeId, naverPage, selectedLoadCount],
     queryFn: async () => {
+      // Get active user from localStorage (for multi-account support)
+      const activeUser = localStorage.getItem('active_naver_user') || 'default'
+      
       const response = await apiClient.get(`/api/naver/reviews/${placeId}`, {
         params: {
           page: naverPage,
           page_size: pageSize,
-          load_count: selectedLoadCount
+          load_count: selectedLoadCount,
+          user_id: activeUser
         }
       })
       return response.data

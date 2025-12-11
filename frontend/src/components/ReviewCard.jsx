@@ -93,12 +93,33 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
       setPosting(true)
       setError(null)
 
-      // 🚀 Optimistic Update: Update UI immediately (before API call)
       const currentReplyText = replyText
       const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
       
-      // Close form and show reply immediately
+      // 🚀 KEEP FORM OPEN during posting
+      // setShowReplyForm(false) - DON'T close immediately
+      
+      // API call
+      if (isNaver) {
+        // Get active user from localStorage (for multi-account support)
+        const activeUser = localStorage.getItem('active_naver_user') || 'default'
+        
+        await apiClient.post(`/api/naver/reviews/reply?user_id=${activeUser}`, {
+          place_id: placeId,
+          review_id: review.review_id,
+          reply_text: currentReplyText
+        }, { timeout: 60000 }) // 60 seconds timeout
+      } else {
+        await apiClient.post('/api/gbp/reviews/reply', {
+          review_id: review.review_id,
+          reply_text: currentReplyText,
+          location_name: locationName || review.name.split('/reviews/')[0]
+        })
+      }
+      
+      // 🚀 SUCCESS: Now close form and update UI
       setShowReplyForm(false)
+      setReplyText('')
       
       // Update the review object in cache (optimistic)
       if (isNaver && placeId) {
@@ -117,23 +138,9 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
             : updatedReviews
         })
       }
-
-      // API call in background
-      if (isNaver) {
-        await apiClient.post('/api/naver/reviews/reply', {
-          place_id: placeId,
-          review_id: review.review_id,
-          reply_text: currentReplyText
-        })
-      } else {
-        await apiClient.post('/api/gbp/reviews/reply', {
-          review_id: review.review_id,
-          reply_text: currentReplyText,
-          location_name: locationName || review.name.split('/reviews/')[0]
-        })
-      }
       
-      setReplyText('')
+      // Show success alert
+      alert('✅ 답글이 성공적으로 게시되었습니다!')
       
       // Verify after 3 seconds (silent background check)
       setTimeout(() => {
@@ -146,14 +153,10 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
         onReplyPosted()
       }
     } catch (err) {
-      // Revert optimistic update on error
-      if (isNaver && placeId) {
-        queryClient.invalidateQueries(['naver-reviews', placeId])
-      }
-      
-      setError(err.response?.data?.detail || '답글 게시 중 오류가 발생했습니다')
-      setShowReplyForm(true)
-      setReplyText(replyText)
+      // Keep form open on error
+      const errorMsg = err.response?.data?.detail || '답글 게시 중 오류가 발생했습니다'
+      setError(errorMsg)
+      alert(`❌ 답글 게시 실패: ${errorMsg}`)
     } finally {
       setPosting(false)
     }
@@ -286,13 +289,20 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
                 <button
                   onClick={handlePostReply}
                   disabled={posting || !replyText.trim()}
-                  className={`flex-1 py-2 px-4 text-white rounded-md font-medium ${
+                  className={`flex-1 py-2 px-4 text-white rounded-md font-medium flex items-center justify-center ${
                     isNaver
                       ? 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
                       : 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400'
                   }`}
                 >
-                  {posting ? '게시 중...' : '답글 게시'}
+                  {posting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      답글 게시 중... (잠시만 기다려주세요)
+                    </>
+                  ) : (
+                    '답글 게시'
+                  )}
                 </button>
 
                 <button
