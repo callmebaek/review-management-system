@@ -99,12 +99,32 @@ class NaverPlaceAutomationSelenium:
             print("🔧 Detected Heroku environment - using chrome-for-testing paths")
             logger.info("🔧 Detected Heroku environment")
             
-            # Heroku chrome-for-testing buildpack sets these environment variables
-            chrome_bin = os.environ.get('GOOGLE_CHROME_BIN', '/app/.chrome-for-testing/chrome-linux64/chrome')
-            chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver')
+            # chrome-for-testing buildpack installs both Chrome and ChromeDriver in the same directory
+            chrome_base = '/app/.chrome-for-testing'
+            chrome_bin = f'{chrome_base}/chrome-linux64/chrome'
+            chromedriver_path = f'{chrome_base}/chromedriver-linux64/chromedriver'
             
             print(f"   Chrome binary: {chrome_bin}")
             print(f"   ChromeDriver: {chromedriver_path}")
+            
+            # Verify files exist
+            if os.path.exists(chrome_bin):
+                print(f"   ✅ Chrome binary found")
+            else:
+                print(f"   ❌ Chrome binary NOT found at {chrome_bin}")
+                # Try to find it
+                import glob
+                chrome_files = glob.glob('/app/.chrome-for-testing/**/chrome', recursive=True)
+                print(f"   Found Chrome at: {chrome_files}")
+            
+            if os.path.exists(chromedriver_path):
+                print(f"   ✅ ChromeDriver found")
+            else:
+                print(f"   ❌ ChromeDriver NOT found at {chromedriver_path}")
+                # Try to find it
+                import glob
+                driver_files = glob.glob('/app/.chrome-for-testing/**/chromedriver', recursive=True)
+                print(f"   Found ChromeDriver at: {driver_files}")
             
             chrome_options.binary_location = chrome_bin
             service = Service(executable_path=chromedriver_path)
