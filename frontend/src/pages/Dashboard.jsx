@@ -26,27 +26,26 @@ export default function Dashboard() {
       setTimeout(() => setShowNaverAuthSuccess(false), 3000)
     }
     
-    // 🚀 CRITICAL: 계정 전환 플래그 확인 (페이지 로드 시 최우선)
-    if (sessionStorage.getItem('account_switched') === 'true') {
-      const switchedTo = sessionStorage.getItem('switched_to')
-      console.log(`🔄 Account switch detected! Switching to: ${switchedTo}`)
+    // 🚀 CRITICAL: URL 파라미터로 계정 전환 감지
+    const switchedUser = searchParams.get('switched_user')
+    if (switchedUser) {
+      console.log(`🔄 Account switch detected from URL! Switching to: ${switchedUser}`)
       
-      // 플래그 제거
-      sessionStorage.removeItem('account_switched')
-      sessionStorage.removeItem('switched_to')
-      
-      // localStorage 다시 읽기
+      // localStorage 다시 읽기 (확인)
       const currentUser = localStorage.getItem('active_naver_user') || 'default'
-      console.log(`📦 Reading from localStorage: ${currentUser}`)
+      console.log(`📦 localStorage value: ${currentUser}`)
+      console.log(`🎯 URL parameter value: ${switchedUser}`)
       
       // State 강제 업데이트
-      setActiveNaverUser(currentUser)
+      setActiveNaverUser(switchedUser)
+      console.log(`✅ State updated to: ${switchedUser}`)
       
-      // 모든 캐시 제거
-      queryClient.removeQueries({ queryKey: ['naverPlaces'] })
-      queryClient.removeQueries({ queryKey: ['naverStatus'] })
+      // 모든 캐시 완전 제거
+      queryClient.clear()
+      console.log('🗑️ All cache cleared')
       
-      console.log(`✅ State updated to: ${currentUser}, cache cleared`)
+      // URL에서 파라미터 제거 (깔끔하게)
+      window.history.replaceState({}, '', '/dashboard')
     }
     
     // 🚀 페이지가 보일 때마다 localStorage 다시 읽기

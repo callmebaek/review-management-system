@@ -77,24 +77,19 @@ export default function NaverLogin() {
       
       // 🚀 STEP 1: localStorage 업데이트
       localStorage.setItem('active_naver_user', user_id)
-      console.log(`🔄 Switched to: ${user_id}`)
+      console.log(`🔄 localStorage updated to: ${user_id}`)
       
-      // 🚀 STEP 2: sessionStorage에 전환 플래그 설정
-      sessionStorage.setItem('account_switched', 'true')
-      sessionStorage.setItem('switched_to', user_id)
-      
-      // 🚀 STEP 3: 모든 캐시 완전 제거
-      queryClient.clear()  // 모든 캐시 제거
+      // 🚀 STEP 2: 모든 캐시 완전 제거
+      queryClient.clear()
+      console.log('🗑️ All cache cleared')
       
       setActiveSession(user_id)
       
       alert(`✅ ${user_id} 계정으로 전환되었습니다!`)
       
-      // 🚀 STEP 4: 완전한 페이지 새로고침으로 Dashboard 이동
+      // 🚀 STEP 3: URL 파라미터로 user_id 전달하여 이동
       setTimeout(() => {
-        window.location.replace('/dashboard')
-        // 또는 더 확실하게:
-        // window.location.href = '/dashboard?_t=' + Date.now()
+        window.location.href = `/dashboard?switched_user=${encodeURIComponent(user_id)}&_t=${Date.now()}`
       }, 300)
     } catch (err) {
       console.error('Account switch error:', err)
