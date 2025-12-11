@@ -327,12 +327,11 @@ class NaverPlaceAutomationSelenium:
     
     def check_login_status(self) -> Dict:
         # ... (Same as before)
-        """Check if logged in to Naver (based on session file)"""
-        # Simply check if session file exists
-        # Actual login validation will happen when making requests
+        """Check if logged in to Naver (based on session file or MongoDB)"""
         print(f"🔍 Checking session file: {self.session_file}")
         print(f"🔍 Session file exists: {os.path.exists(self.session_file)}")
         
+        # Priority 1: Check local session file
         if os.path.exists(self.session_file):
             logger.info("✅ Session file found - assuming logged in")
             print("✅ Session file found - returning logged_in=True")
@@ -340,13 +339,28 @@ class NaverPlaceAutomationSelenium:
                 'logged_in': True,
                 'message': 'Logged in to Naver (session file found)'
             }
-        else:
-            logger.info("❌ No session file found")
-            print("❌ No session file found - returning logged_in=False")
-            return {
-                'logged_in': False,
-                'message': 'No session found. Please login first.'
-            }
+        
+        # Priority 2: Check MongoDB session
+        try:
+            mongodb_session = self._load_session_from_mongodb()
+            if mongodb_session:
+                logger.info("✅ MongoDB session found - assuming logged in")
+                print("✅ MongoDB session found - returning logged_in=True")
+                return {
+                    'logged_in': True,
+                    'message': 'Logged in to Naver (MongoDB session found)'
+                }
+        except Exception as e:
+            logger.error(f"❌ MongoDB session check error: {e}")
+            print(f"❌ MongoDB session check error: {e}")
+        
+        # No session found
+        logger.info("❌ No session found")
+        print("❌ No session found - returning logged_in=False")
+        return {
+            'logged_in': False,
+            'message': 'No session found. Please login first.'
+        }
     
     def get_places(self) -> List[Dict]:
         # ... (Same as before)
