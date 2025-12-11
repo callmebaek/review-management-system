@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { Download, CheckCircle, XCircle, AlertCircle, Info, RefreshCw, Trash2, HelpCircle, Users } from 'lucide-react'
 
 export default function NaverLogin() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [sessions, setSessions] = useState([])
   const [activeSession, setActiveSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -44,7 +46,18 @@ export default function NaverLogin() {
       await apiClient.post(`/api/naver/session/switch?user_id=${user_id}`)
       setActiveSession(user_id)
       localStorage.setItem('active_naver_user', user_id)
-      alert(`✅ ${user_id} 계정으로 전환되었습니다!`)
+      
+      // 🚀 캐시 무효화: 이전 계정의 데이터 제거
+      queryClient.invalidateQueries(['naverPlaces'])
+      queryClient.invalidateQueries(['naverStatus'])
+      queryClient.removeQueries(['naver-reviews'])  // 모든 리뷰 캐시 제거
+      
+      alert(`✅ ${user_id} 계정으로 전환되었습니다!\n\n잠시 후 해당 계정의 매장 목록이 표시됩니다.`)
+      
+      // 전환 후 잠시 대기하고 Dashboard로 자동 이동
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 1000)
     } catch (err) {
       alert('계정 전환 중 오류가 발생했습니다')
     }

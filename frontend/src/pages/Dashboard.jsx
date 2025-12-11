@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import { Store, MessageSquare, Star, AlertCircle, CheckCircle, LogOut, Plus } from 'lucide-react'
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const [showAuthSuccess, setShowAuthSuccess] = useState(false)
   const [showNaverAuthSuccess, setShowNaverAuthSuccess] = useState(false)
@@ -19,7 +20,15 @@ export default function Dashboard() {
       setShowNaverAuthSuccess(true)
       setTimeout(() => setShowNaverAuthSuccess(false), 3000)
     }
-  }, [searchParams])
+    
+    // 🚀 페이지 로드 시 active_naver_user 변경 감지
+    // 다른 페이지에서 계정을 전환하고 돌아왔을 때 캐시 무효화
+    const currentUser = localStorage.getItem('active_naver_user')
+    if (currentUser) {
+      // 캐시 키에 user_id 포함되지 않았으므로 무효화 필요
+      queryClient.invalidateQueries(['naverPlaces'])
+    }
+  }, [searchParams, queryClient])
 
   // Check auth status (Mock 모드에서는 항상 통과)
   const { data: authStatus, isLoading: authLoading } = useQuery({
@@ -85,15 +94,16 @@ export default function Dashboard() {
     retry: false
   })
 
-  // Fetch Naver places if logged in
+  // Get active user for cache key
+  const activeNaverUser = localStorage.getItem('active_naver_user') || 'default'
+
+  // Fetch Naver places if logged in (with user_id in cache key)
   const { data: naverPlaces, isLoading: naverPlacesLoading } = useQuery({
-    queryKey: ['naverPlaces'],
+    queryKey: ['naverPlaces', activeNaverUser],  // Include user_id in cache key
     queryFn: async () => {
       try {
-        // Get active user from localStorage (for multi-account support)
-        const activeUser = localStorage.getItem('active_naver_user') || 'default'
-        
-        const response = await apiClient.get(`/api/naver/places?user_id=${activeUser}`)
+        const response = await apiClient.get(`/api/naver/places?user_id=${activeNaverUser}`)
+        console.log(`🔍 Loaded places for user: ${activeNaverUser}`)
         return response.data
       } catch (err) {
         console.error('Failed to fetch Naver places:', err)
