@@ -14,7 +14,7 @@ class TaskManager:
     
     def __init__(self):
         self.db = get_db()
-        self.collection = self.db.tasks if self.db else None
+        self.collection = self.db.tasks if self.db is not None else None
     
     def create_task(self, task_type: str, user_id: str, params: Dict) -> str:
         """
