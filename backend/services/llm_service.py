@@ -5,6 +5,7 @@ from typing import Optional
 from config import settings
 from models.schemas import GenerateReplyRequest, GenerateReplyResponse
 from fastapi import HTTPException
+import httpx
 
 
 class LLMService:
@@ -22,7 +23,23 @@ class LLMService:
                     status_code=500,
                     detail="OpenAI API key not configured. Please set OPENAI_API_KEY in .env file"
                 )
-            self.client = OpenAI(api_key=settings.openai_api_key)
+            
+            # Create httpx client without proxies parameter
+            # This fixes compatibility issues with newer versions
+            try:
+                http_client = httpx.Client(
+                    timeout=60.0,
+                    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                )
+                self.client = OpenAI(
+                    api_key=settings.openai_api_key,
+                    http_client=http_client
+                )
+            except Exception as e:
+                print(f"⚠️ Error creating custom http_client: {e}")
+                # Fallback to simple initialization
+                self.client = OpenAI(api_key=settings.openai_api_key)
+        
         return self.client
     
     def _load_prompts(self) -> dict:
