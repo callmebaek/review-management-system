@@ -27,6 +27,11 @@ export default function Reviews() {
   const [showLoadCountModal, setShowLoadCountModal] = useState(false)
   const [selectedLoadCount, setSelectedLoadCount] = useState(300) // Default: 300
   const [hasSelectedCount, setHasSelectedCount] = useState(false) // Track if user has chosen
+  
+  // 🚀 ASYNC Loading (타임아웃 우회)
+  const [useAsyncLoading, setUseAsyncLoading] = useState(false)
+  const [asyncTaskId, setAsyncTaskId] = useState(null)
+  const [asyncProgress, setAsyncProgress] = useState(null)
 
   // Fetch GBP reviews
   const { data: gbpReviewsData, isLoading: gbpLoading, error: gbpError, refetch: refetchGBP } = useQuery({
@@ -106,10 +111,12 @@ export default function Reviews() {
     retry: false
   })
 
-  // 🚀 Handle different data structures
+  // 🚀 Handle different data structures (including async result)
   let allReviewsData = platform === 'gbp' 
     ? gbpReviewsData 
-    : naverReviewsData?.reviews || naverReviewsData  // Handle both array and object response
+    : (asyncProgress?.status === 'completed' && asyncProgress?.result)
+      ? asyncProgress.result?.reviews || asyncProgress.result  // 비동기 로딩 완료 시
+      : naverReviewsData?.reviews || naverReviewsData  // 동기 로딩
   
   // 🚀 NEW: Client-side filtering for Naver (backend returns ALL reviews)
   let filteredReviews = allReviewsData
@@ -196,6 +203,55 @@ export default function Reviews() {
     }
   }, [isLoading, platform, naverPage])
 
+  // 🚀 비동기 리뷰 로딩 시작
+  const startAsyncLoading = async () => {
+    try {
+      const activeUser = localStorage.getItem('active_naver_user') || 'default'
+      
+      const response = await apiClient.post('/api/naver/reviews/load-async', {
+        place_id: placeId,
+        load_count: selectedLoadCount,
+        user_id: activeUser
+      })
+      
+      setAsyncTaskId(response.data.task_id)
+      setUseAsyncLoading(true)
+      
+      console.log(`🚀 Async loading started: ${response.data.task_id}`)
+    } catch (err) {
+      console.error('Failed to start async loading:', err)
+      alert('비동기 로딩 시작 실패: ' + (err.response?.data?.detail || err.message))
+    }
+  }
+  
+  // 🚀 작업 진행 상황 폴링
+  const { data: taskStatus } = useQuery({
+    queryKey: ['task-status', asyncTaskId],
+    queryFn: async () => {
+      if (!asyncTaskId) return null
+      
+      const response = await apiClient.get(`/api/naver/tasks/${asyncTaskId}`)
+      const task = response.data
+      
+      console.log(`📊 Task progress: ${task.progress?.current || 0}/${task.progress?.total || 0} - ${task.status}`)
+      
+      setAsyncProgress(task)
+      
+      // 완료되면 폴링 중지하고 결과 표시
+      if (task.status === 'completed' && task.result) {
+        setUseAsyncLoading(false)
+        setAsyncTaskId(null)
+        // 결과를 캐시에 저장
+        // (수동으로 naverReviewsData 업데이트하거나 refetch)
+      }
+      
+      return task
+    },
+    enabled: !!asyncTaskId && useAsyncLoading,
+    refetchInterval: 2000, // 2초마다 폴링
+    retry: false
+  })
+  
   const handleReplyPosted = async () => {
     if (platform === 'gbp') {
       refetchGBP()
@@ -312,10 +368,18 @@ export default function Reviews() {
               onClick={() => {
                 setHasSelectedCount(true)
                 setShowLoadCountModal(false)
+                
+                // 🚀 100개 이상은 자동으로 비동기 모드 사용
+                if (selectedLoadCount >= 100) {
+                  startAsyncLoading()
+                }
               }}
               className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
             >
               {selectedLoadCount === 9999 ? '전체' : selectedLoadCount + '개'} 리뷰 불러오기 →
+              {selectedLoadCount >= 100 && (
+                <span className="text-xs ml-2">(비동기 모드)</span>
+              )}
             </button>
           </div>
         </div>
@@ -514,6 +578,45 @@ export default function Reviews() {
                 </div>
               </div>
             )}
+          </div>
+        ) : asyncProgress && asyncProgress.status !== 'completed' ? (
+          /* 🚀 비동기 로딩 진행률 표시 */
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-8">
+            <div className="max-w-md mx-auto">
+              <div className="text-center mb-6">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-3 border-green-600 mx-auto mb-4"></div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  리뷰 로딩 중...
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {asyncProgress.progress?.message || '준비 중...'}
+                </p>
+              </div>
+              
+              {/* 진행률 바 */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-700 mb-2">
+                  <span>진행률</span>
+                  <span className="font-semibold">
+                    {asyncProgress.progress?.current || 0} / {asyncProgress.progress?.total || selectedLoadCount}
+                    ({Math.round(((asyncProgress.progress?.current || 0) / (asyncProgress.progress?.total || selectedLoadCount)) * 100)}%)
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 h-3 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, ((asyncProgress.progress?.current || 0) / (asyncProgress.progress?.total || selectedLoadCount)) * 100)}%`
+                    }}
+                  ></div>
+                </div>
+              </div>
+              
+              <div className="text-center text-xs text-gray-500">
+                <p>타임아웃 걱정 없이 안전하게 로딩 중입니다</p>
+                <p className="mt-1">잠시만 기다려주세요... ☕</p>
+              </div>
+            </div>
           </div>
         ) : error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">

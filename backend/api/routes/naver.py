@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, BackgroundTasks
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from config import settings
 from datetime import datetime, timedelta
 import json
+import threading
 
 router = APIRouter()
 
@@ -122,10 +123,101 @@ async def get_naver_places(user_id: str = "default"):
     return places
 
 
+@router.post("/reviews/load-async")
+async def load_reviews_async(
+    place_id: str = Body(...),
+    load_count: int = Body(50),
+    user_id: str = Body("default")
+):
+    """
+    비동기로 리뷰 로드 (30초 타임아웃 우회)
+    
+    즉시 task_id를 반환하고 백그라운드에서 리뷰 로드
+    프론트엔드는 /tasks/{task_id}로 진행 상황 폴링
+    """
+    from utils.task_manager import task_manager
+    
+    # Create task
+    task_id = task_manager.create_task(
+        task_type='review_load',
+        user_id=user_id,
+        params={
+            'place_id': place_id,
+            'load_count': load_count,
+            'page': 1,
+            'page_size': 20
+        }
+    )
+    
+    # Start background thread
+    def background_load():
+        try:
+            # Update status to processing
+            task_manager.update_task_status(task_id, 'processing')
+            
+            # Set active user
+            naver_service.set_active_user(user_id)
+            
+            # Load reviews (this can take minutes!)
+            result = naver_service.get_reviews(
+                place_id,
+                page=1,
+                page_size=20,
+                filter_type='all',
+                load_count=load_count
+            )
+            
+            # Store result
+            task_manager.set_result(task_id, result)
+            task_manager.update_task_status(task_id, 'completed')
+            
+        except Exception as e:
+            print(f"❌ Background task {task_id} failed: {e}")
+            task_manager.set_error(task_id, str(e))
+    
+    # Start thread
+    thread = threading.Thread(target=background_load, daemon=True)
+    thread.start()
+    
+    return {
+        'task_id': task_id,
+        'message': '리뷰 로딩을 시작했습니다. 진행 상황을 확인하세요.',
+        'status_url': f'/api/naver/tasks/{task_id}'
+    }
+
+
+@router.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    작업 진행 상황 조회
+    
+    프론트엔드가 이 API를 2-3초마다 호출하여 진행 상황 확인
+    """
+    from utils.task_manager import task_manager
+    
+    task = task_manager.get_task(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {
+        'task_id': task['_id'],
+        'status': task['status'],
+        'progress': task['progress'],
+        'result': task.get('result'),
+        'error': task.get('error'),
+        'created_at': task['created_at'].isoformat() if task.get('created_at') else None,
+        'started_at': task.get('started_at').isoformat() if task.get('started_at') else None,
+        'completed_at': task.get('completed_at').isoformat() if task.get('completed_at') else None
+    }
+
+
 @router.get("/reviews/{place_id}")
 async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, load_count: int = 300, user_id: str = "default"):
     """
     Get reviews for a specific place with pagination
+    
+    ⚠️ 주의: 100개 이상은 /reviews/load-async 사용 권장 (타임아웃 방지)
     
     User can specify how many reviews to load at once
     

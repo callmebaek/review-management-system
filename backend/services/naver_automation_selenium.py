@@ -807,14 +807,16 @@ class NaverPlaceAutomationSelenium:
                     else:
                         no_change += 1
                     
-                    # 🚀 Early exit if we have enough reviews
+                    # 🚀 PRIORITY: Reach target first!
                     if current_count >= TARGET_LOAD_COUNT:
                         print(f"  ✅ Reached target {TARGET_LOAD_COUNT}!")
                         break
                     
-                    # 🚀 Early exit (5 attempts without change)
-                    if no_change >= 5:
-                        print(f"  ⚠️ No more content loading (stopped at {current_count} reviews).")
+                    # 🚀 Only exit early if we're stuck AND haven't reached target
+                    # Wait longer (10 attempts) to ensure we get all requested reviews
+                    if no_change >= 10:
+                        print(f"  ⚠️ No more content loading after {no_change} attempts (stopped at {current_count} reviews).")
+                        print(f"  ⚠️ Requested: {TARGET_LOAD_COUNT}, Got: {current_count}")
                         break
                     
                     # 🚀 FIX: Use scrollIntoView on the LAST element
@@ -823,15 +825,14 @@ class NaverPlaceAutomationSelenium:
                     else:
                         driver.execute_script("window.scrollBy(0, 1000);")
                     
-                    # 🚀 Balanced wait time for page rendering
-                    time.sleep(0.5)
+                    # 🚀 IMPORTANT: Wait longer for lazy loading
+                    time.sleep(0.8)  # Increased for reliable loading
                     
                 except Exception as e:
                     print(f"  ⚠️ Scroll error: {e}")
-                    # Don't break immediately, try once more
-                    if no_change >= 2:
-                        break
                     no_change += 1
+                    if no_change >= 5:
+                        break
             
             # 🚀 STEP 4: Parse Data
             print(f"🔍 Parsing {last_count} reviews...")
