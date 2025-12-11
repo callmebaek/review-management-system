@@ -234,10 +234,69 @@ async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, l
     return await naver_service.get_reviews(place_id, page=page, page_size=page_size, filter_type='all', load_count=load_count)
 
 
+@router.post("/reviews/reply-async")
+async def post_reply_async(
+    place_id: str = Body(...),
+    review_id: str = Body(...),
+    reply_text: str = Body(...),
+    user_id: str = Body("default")
+):
+    """
+    비동기로 답글 게시 (30초 타임아웃 우회)
+    """
+    from utils.task_manager import task_manager
+    
+    # Create task
+    task_id = task_manager.create_task(
+        task_type='reply_post',
+        user_id=user_id,
+        params={
+            'place_id': place_id,
+            'review_id': review_id,
+            'reply_text': reply_text
+        }
+    )
+    
+    # Start background thread
+    def background_reply():
+        try:
+            task_manager.update_task_status(task_id, 'processing')
+            task_manager.update_progress(task_id, 0, '답글 게시 중...')
+            
+            # Set active user
+            naver_service.set_active_user(user_id)
+            
+            # Post reply (this can take 30+ seconds!)
+            result = naver_service.post_reply(
+                place_id=place_id,
+                review_id=review_id,
+                reply_text=reply_text
+            )
+            
+            task_manager.set_result(task_id, result)
+            task_manager.update_task_status(task_id, 'completed')
+            task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
+            
+        except Exception as e:
+            print(f"❌ Background reply task {task_id} failed: {e}")
+            task_manager.set_error(task_id, str(e))
+    
+    thread = threading.Thread(target=background_reply, daemon=True)
+    thread.start()
+    
+    return {
+        'task_id': task_id,
+        'message': '답글을 게시하고 있습니다.',
+        'status_url': f'/api/naver/tasks/{task_id}'
+    }
+
+
 @router.post("/reviews/reply")
 async def post_naver_reply(request: NaverReplyRequest, user_id: str = "default"):
     """
-    Post a reply to a Naver review
+    Post a reply to a Naver review (동기 방식 - 30초 제한)
+    
+    ⚠️ 주의: /reviews/reply-async 사용 권장 (타임아웃 방지)
     
     Args:
         request: Reply request with place_id, review_id, and reply_text

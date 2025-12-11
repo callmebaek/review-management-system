@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Star, User, Calendar, MessageSquare, Sparkles } from 'lucide-react'
 import apiClient from '../api/client'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tantml:react-query'
 
 export default function ReviewCard({ review, platform = 'gbp', locationName, placeId, onReplyPosted }) {
   const queryClient = useQueryClient()
@@ -10,9 +10,52 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
   const [generating, setGenerating] = useState(false)
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState(null)
+  
+  // 🚀 비동기 답글 게시
+  const [replyTaskId, setReplyTaskId] = useState(null)
+  const [replyProgress, setReplyProgress] = useState(null)
 
   const isNaver = platform === 'naver'
   const hasReply = isNaver ? !!review.has_reply : !!review.review_reply
+  
+  // 🚀 답글 게시 작업 상태 폴링
+  const { data: replyTaskStatus } = useQuery({
+    queryKey: ['reply-task', replyTaskId],
+    queryFn: async () => {
+      if (!replyTaskId) return null
+      
+      const response = await apiClient.get(`/api/naver/tasks/${replyTaskId}`)
+      const task = response.data
+      
+      setReplyProgress(task)
+      
+      // 완료되면 폴링 중지
+      if (task.status === 'completed') {
+        setPosting(false)
+        setReplyTaskId(null)
+        setShowReplyForm(false)
+        setReplyText('')
+        
+        // 캐시 무효화
+        if (isNaver && placeId) {
+          queryClient.invalidateQueries(['naver-reviews', placeId])
+        }
+        
+        if (onReplyPosted) {
+          onReplyPosted()
+        }
+      } else if (task.status === 'failed') {
+        setPosting(false)
+        setReplyTaskId(null)
+        setError(task.error || '답글 게시 실패')
+      }
+      
+      return task
+    },
+    enabled: !!replyTaskId,
+    refetchInterval: 2000,  // 2초마다 폴링
+    retry: false
+  })
 
   const getRatingStars = (rating) => {
     // Naver: rating is a number (1-5)
@@ -96,19 +139,24 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
       const currentReplyText = replyText
       const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
       
-      // 🚀 KEEP FORM OPEN during posting
-      // setShowReplyForm(false) - DON'T close immediately
-      
-      // API call
+      // 🚀 네이버는 비동기 방식 사용 (타임아웃 우회)
       if (isNaver) {
         // Get active user from localStorage (for multi-account support)
         const activeUser = localStorage.getItem('active_naver_user') || 'default'
         
-        await apiClient.post(`/api/naver/reviews/reply?user_id=${activeUser}`, {
+        // 비동기 답글 게시 시작
+        const response = await apiClient.post('/api/naver/reviews/reply-async', {
           place_id: placeId,
           review_id: review.review_id,
-          reply_text: currentReplyText
-        }, { timeout: 60000 }) // 60 seconds timeout
+          reply_text: currentReplyText,
+          user_id: activeUser
+        })
+        
+        // 작업 ID 저장하고 폴링 시작
+        setReplyTaskId(response.data.task_id)
+        // posting은 true 유지 (폴링에서 false로 변경)
+        
+        return // 폴링이 완료를 처리함
       } else {
         await apiClient.post('/api/gbp/reviews/reply', {
           review_id: review.review_id,
@@ -289,7 +337,7 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
                   {posting ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      답글 게시 중... (잠시만 기다려주세요)
+                      {replyProgress?.progress?.message || '답글 게시 중...'}
                     </>
                   ) : (
                     '답글 게시'
