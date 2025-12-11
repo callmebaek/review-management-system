@@ -1115,65 +1115,39 @@ class NaverPlaceAutomationSelenium:
             if not target_review:
                 raise Exception(f"Could not find review with ID: {review_id}")
             
-            # 🚀 STALE ELEMENT FIX: Use retry logic with element re-finding
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    print(f"🔄 Attempt {attempt + 1}/{max_retries} to post reply...")
-                    
-                    # Re-find the target review element each time (avoid stale reference)
-                    print("🔍 Re-finding target review element...")
-                    all_lis = driver.find_elements(By.TAG_NAME, "li")
-                    target_review = None
-                    
-                    for li in all_lis:
-                        try:
-                            author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
-                            if author == target_author:
-                                target_review = li
-                                print(f"✅ Re-found target review: {author}")
-                                break
-                        except:
-                            continue
-                    
-                    if not target_review:
-                        raise Exception(f"Lost target review element")
-                    
-                    # Scroll to review
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)
-                    time.sleep(1)
-                    
-                    # Click reply button: "답글 쓰기" (use JavaScript for reliability)
-                    print("🖱️  Clicking '답글 쓰기' button...")
-                    reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
-                    driver.execute_script("arguments[0].click();", reply_btn)
-                    time.sleep(1.5)
-                    
-                    # Find textarea (should appear after clicking)
-                    print("⌨️  Filling reply text...")
-                    textarea = WebDriverWait(target_review, 10).until(
-                        EC.presence_of_element_located((By.TAG_NAME, "textarea"))
-                    )
-                    textarea.clear()
-                    time.sleep(0.3)
-                    textarea.send_keys(reply_text)
-                    time.sleep(0.5)
-                    
-                    # Click submit button: "등록"
-                    print("📤 Clicking '등록' button...")
-                    submit_btn = target_review.find_element(By.XPATH, ".//button[contains(., '등록')]")
-                    driver.execute_script("arguments[0].click();", submit_btn)
-                    time.sleep(3)  # Wait for submission
-                    
-                    # Success!
-                    print("✅ Reply posting completed (no stale element error)")
-                    break
-                    
-                except Exception as retry_err:
-                    print(f"⚠️ Attempt {attempt + 1} failed: {retry_err}")
-                    if attempt == max_retries - 1:
-                        raise  # Re-raise on last attempt
-                    time.sleep(1)  # Wait before retry
+            # 🚀 Simple and reliable: No retry, just do it right the first time
+            # Scroll to review
+            print("📜 Scrolling to review...")
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)
+            time.sleep(1)
+            
+            # Click reply button: "답글 쓰기"
+            print("🖱️  Clicking '답글 쓰기' button...")
+            reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
+            driver.execute_script("arguments[0].click();", reply_btn)
+            time.sleep(2)  # Wait for form to appear
+            
+            # Find textarea
+            print("⌨️  Filling reply text...")
+            textarea = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+            )
+            textarea.click()
+            time.sleep(0.5)
+            textarea.clear()
+            time.sleep(0.3)
+            textarea.send_keys(reply_text)
+            time.sleep(1)
+            
+            # Click submit button: "등록"
+            print("📤 Clicking '등록' button...")
+            submit_btns = driver.find_elements(By.XPATH, "//button[contains(., '등록')]")
+            if submit_btns:
+                driver.execute_script("arguments[0].click();", submit_btns[-1])  # Last "등록" button
+                time.sleep(4)  # Wait for submission
+                print("✅ Reply submission completed")
+            else:
+                raise Exception("Could not find '등록' button")
             
             # Check for success (reply should now appear)
             try:
