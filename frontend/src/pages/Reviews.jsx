@@ -196,11 +196,20 @@ export default function Reviews() {
     if (platform === 'gbp') {
       refetchGBP()
     } else {
-      // For Naver, wait a moment then refetch to get updated data
-      console.log('✅ 답글이 등록되었습니다. 1초 후 새로고침합니다.')
+      // For Naver, wait longer for cloud environment (Heroku needs more time)
+      console.log('✅ 답글이 등록되었습니다. 잠시 후 새로고침합니다.')
+      
+      // Show success message immediately
+      alert('✅ 답글이 성공적으로 등록되었습니다!')
+      
+      // Wait 3 seconds then refetch to get updated data
       setTimeout(() => {
-        refetchNaver()
-      }, 1000)
+        console.log('🔄 리뷰 목록을 새로고침합니다...')
+        refetchNaver().catch(err => {
+          console.warn('새로고침 중 오류 발생 (답글은 정상 등록됨):', err)
+          // Even if refetch fails, the reply was posted successfully
+        })
+      }, 3000)
     }
   }
 
