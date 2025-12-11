@@ -53,8 +53,8 @@ if os.getenv("VERCEL_URL"):
     allowed_origins.append(vercel_url)
     print(f"✅ CORS: Vercel URL 추가 - {vercel_url}")
 
-# 모든 Vercel 프리뷰 배포 허용 (선택사항)
-allowed_origins.append("https://*.vercel.app")
+# Vercel 정확한 URL 추가
+allowed_origins.append("https://review-management-system-ivory.vercel.app")
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +62,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Vercel 프리뷰 배포도 허용
 )
 
 
