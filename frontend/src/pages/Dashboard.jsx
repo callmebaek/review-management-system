@@ -10,6 +10,11 @@ export default function Dashboard() {
   const [searchParams] = useSearchParams()
   const [showAuthSuccess, setShowAuthSuccess] = useState(false)
   const [showNaverAuthSuccess, setShowNaverAuthSuccess] = useState(false)
+  
+  // 🚀 State로 active user 관리 (localStorage 변경 감지)
+  const [activeNaverUser, setActiveNaverUser] = useState(
+    () => localStorage.getItem('active_naver_user') || 'default'
+  )
 
   useEffect(() => {
     if (searchParams.get('auth') === 'success') {
@@ -21,14 +26,29 @@ export default function Dashboard() {
       setTimeout(() => setShowNaverAuthSuccess(false), 3000)
     }
     
-    // 🚀 페이지 로드 시 active_naver_user 변경 감지
-    // 다른 페이지에서 계정을 전환하고 돌아왔을 때 캐시 무효화
-    const currentUser = localStorage.getItem('active_naver_user')
-    if (currentUser) {
-      // 캐시 키에 user_id 포함되지 않았으므로 무효화 필요
-      queryClient.invalidateQueries(['naverPlaces'])
+    // 🚀 페이지가 보일 때마다 localStorage 다시 읽기
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const currentUser = localStorage.getItem('active_naver_user') || 'default'
+        if (currentUser !== activeNaverUser) {
+          console.log(`🔄 Active user changed: ${activeNaverUser} → ${currentUser}`)
+          setActiveNaverUser(currentUser)
+          queryClient.invalidateQueries(['naverPlaces'])
+        }
+      }
     }
-  }, [searchParams, queryClient])
+    
+    // 페이지가 다시 보일 때 (다른 탭에서 돌아왔을 때)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // 페이지 포커스 시에도 확인
+    window.addEventListener('focus', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
+    }
+  }, [searchParams, queryClient, activeNaverUser])
 
   // Check auth status (Mock 모드에서는 항상 통과)
   const { data: authStatus, isLoading: authLoading } = useQuery({
@@ -93,9 +113,6 @@ export default function Dashboard() {
     },
     retry: false
   })
-
-  // Get active user for cache key
-  const activeNaverUser = localStorage.getItem('active_naver_user') || 'default'
 
   // Fetch Naver places if logged in (with user_id in cache key)
   const { data: naverPlaces, isLoading: naverPlacesLoading } = useQuery({
