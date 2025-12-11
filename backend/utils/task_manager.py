@@ -49,7 +49,7 @@ class TaskManager:
             'completed_at': None
         }
         
-        if self.collection:
+        if self.collection is not None:
             self.collection.insert_one(task)
             print(f"✅ Task created: {task_id} ({task_type})")
         
@@ -71,7 +71,7 @@ class TaskManager:
         # Add any additional fields
         update_fields.update(kwargs)
         
-        if self.collection:
+        if self.collection is not None:
             self.collection.update_one(
                 {'_id': task_id},
                 {'$set': update_fields}
@@ -80,7 +80,7 @@ class TaskManager:
     
     def update_progress(self, task_id: str, current: int, message: str):
         """Update task progress"""
-        if self.collection:
+        if self.collection is not None:
             self.collection.update_one(
                 {'_id': task_id},
                 {
@@ -94,14 +94,14 @@ class TaskManager:
     
     def get_task(self, task_id: str) -> Optional[Dict]:
         """Get task by ID"""
-        if self.collection:
+        if self.collection is not None:
             task = self.collection.find_one({'_id': task_id})
             return task
         return None
     
     def set_result(self, task_id: str, result: any):
         """Set task result"""
-        if self.collection:
+        if self.collection is not None:
             self.collection.update_one(
                 {'_id': task_id},
                 {
@@ -114,7 +114,7 @@ class TaskManager:
     
     def set_error(self, task_id: str, error: str):
         """Set task error"""
-        if self.collection:
+        if self.collection is not None:
             self.collection.update_one(
                 {'_id': task_id},
                 {
@@ -129,7 +129,7 @@ class TaskManager:
     
     def cleanup_old_tasks(self, days: int = 7):
         """Delete tasks older than X days"""
-        if self.collection:
+        if self.collection is not None:
             cutoff = datetime.utcnow() - timedelta(days=days)
             result = self.collection.delete_many({
                 'created_at': {'$lt': cutoff}
