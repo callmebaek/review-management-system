@@ -292,6 +292,23 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
             </button>
           ) : (
             <div className="space-y-3">
+              {/* 🚀 답글 게시 중 알림 (명확하게) */}
+              {posting && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-4 animate-pulse">
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600 mr-3"></div>
+                    <div>
+                      <p className="text-sm font-semibold text-green-900">
+                        {replyProgress?.progress?.message || '답글 게시 중...'}
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        타임아웃 걱정 없이 안전하게 처리하고 있습니다 ☕
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-3">
                   <p className="text-sm text-red-700">{error}</p>
