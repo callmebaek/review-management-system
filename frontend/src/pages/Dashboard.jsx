@@ -141,8 +141,10 @@ export default function Dashboard() {
     queryKey: ['naverPlaces', activeNaverUser],  // Include user_id in cache key
     queryFn: async () => {
       try {
+        console.log(`🚀 Fetching places for user: ${activeNaverUser}`)
         const response = await apiClient.get(`/api/naver/places?user_id=${activeNaverUser}`)
-        console.log(`🔍 Loaded places for user: ${activeNaverUser}`)
+        console.log(`✅ Received ${response.data?.length || 0} places for: ${activeNaverUser}`)
+        console.log(`📋 Places:`, response.data)
         return response.data
       } catch (err) {
         console.error('Failed to fetch Naver places:', err)
@@ -151,7 +153,10 @@ export default function Dashboard() {
     },
     enabled: !!naverStatus?.logged_in,
     retry: false,
-    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+    staleTime: 0,  // 🚀 캐시 사용 안 함 (항상 새로 가져오기)
+    cacheTime: 0,  // 🚀 캐시 저장 안 함
+    refetchOnMount: true,  // 🚀 마운트 시 항상 새로고침
+    refetchOnWindowFocus: false
   })
 
   const handleLogout = async () => {
