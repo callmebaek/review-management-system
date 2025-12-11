@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Star, User, Calendar, MessageSquare, Sparkles } from 'lucide-react'
 import apiClient from '../api/client'
-import { useQueryClient, useQuery } from '@tantml:react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 
 export default function ReviewCard({ review, platform = 'gbp', locationName, placeId, onReplyPosted }) {
   const queryClient = useQueryClient()
