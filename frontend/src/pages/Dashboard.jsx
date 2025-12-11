@@ -107,14 +107,25 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
+      // 모든 로그인 관련 데이터 제거
       localStorage.removeItem('user_logged_in')
-      await apiClient.post('/auth/logout')
-      navigate('/login')
+      localStorage.removeItem('active_naver_user')
+      localStorage.clear()  // 모든 localStorage 클리어
+      
+      // 백엔드 로그아웃 시도 (실패해도 계속 진행)
+      try {
+        await apiClient.post('/auth/logout')
+      } catch (apiErr) {
+        console.warn('API logout failed (continuing anyway):', apiErr)
+      }
+      
+      // 강제로 로그인 페이지로 이동 (replace로 히스토리 제거)
+      window.location.replace('/login')
     } catch (err) {
       console.error('Logout error:', err)
-      // Mock 모드: 에러가 나도 로그아웃
-      localStorage.removeItem('user_logged_in')
-      navigate('/login')
+      // 에러가 나도 강제 로그아웃
+      localStorage.clear()
+      window.location.replace('/login')
     }
   }
 
@@ -264,17 +275,13 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <button
-                    onClick={async () => {
-                      try {
-                        await apiClient.post('/api/naver/logout')
-                        window.location.reload()
-                      } catch (err) {
-                        console.error('Logout error:', err)
-                      }
+                    onClick={() => {
+                      // 세션 관리 페이지로 이동 (계정 전환 가능)
+                      navigate('/naver-login')
                     }}
                     className="text-xs text-green-600 hover:text-green-700 underline"
                   >
-                    연결 해제
+                    계정 관리
                   </button>
                 </div>
               </div>
