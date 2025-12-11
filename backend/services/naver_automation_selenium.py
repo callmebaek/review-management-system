@@ -75,17 +75,44 @@ class NaverPlaceAutomationSelenium:
         chrome_options = Options()
         if headless:
             chrome_options.add_argument('--headless=new')
+        
+        # Essential options for Heroku
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        
+        # Heroku specific
+        chrome_options.add_argument('--single-process')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--remote-debugging-port=9222')
+        
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        # Auto-install ChromeDriver
-        service = Service(ChromeDriverManager().install())
+        # Check if running on Heroku (has DYNO environment variable)
+        if os.environ.get('DYNO'):
+            print("🔧 Detected Heroku environment - using chrome-for-testing paths")
+            logger.info("🔧 Detected Heroku environment")
+            
+            # Heroku chrome-for-testing buildpack sets these environment variables
+            chrome_bin = os.environ.get('GOOGLE_CHROME_BIN', '/app/.chrome-for-testing/chrome-linux64/chrome')
+            chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver')
+            
+            print(f"   Chrome binary: {chrome_bin}")
+            print(f"   ChromeDriver: {chromedriver_path}")
+            
+            chrome_options.binary_location = chrome_bin
+            service = Service(executable_path=chromedriver_path)
+        else:
+            print("💻 Local environment - using ChromeDriverManager")
+            # Auto-install ChromeDriver for local development
+            service = Service(ChromeDriverManager().install())
+        
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
         # Try to load session (MongoDB first, then local file)
