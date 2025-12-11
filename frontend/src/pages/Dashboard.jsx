@@ -192,27 +192,26 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-gray-600 mr-3 mt-0.5" />
+                  <div className="w-5 h-5 mr-3 mt-0.5 flex items-center justify-center">
+                    <span className="text-xl">🚀</span>
+                  </div>
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900">Google Business Profile</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      연결되지 않음
+                    <h3 className="text-sm font-medium text-blue-900">Google Business Profile</h3>
+                    <p className="text-sm text-blue-700 mt-1 font-semibold">
+                      구글 비즈니스 프로필 리뷰 관리 시스템 커밍순!! 기대해주세요! 🎉
+                    </p>
+                    <p className="text-xs text-blue-600 mt-2">
+                      Google API 승인 심사 중입니다
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={async () => {
-                    try {
-                      const response = await apiClient.get('/auth/google/login')
-                      window.location.href = response.data.authorization_url
-                    } catch (err) {
-                      console.error('GBP 연결 오류:', err)
-                    }
-                  }}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  disabled
+                  className="flex items-center space-x-2 bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed opacity-60"
+                  title="Google API 승인 대기 중"
                 >
                   <Plus className="w-4 h-4" />
                   <span>연결하기</span>

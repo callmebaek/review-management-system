@@ -59,19 +59,25 @@ async def naver_login_status():
 
 
 @router.get("/places")
-async def get_naver_places():
+async def get_naver_places(user_id: str = "default"):
     """
     Get list of places in Smart Place Center
+    
+    Args:
+        user_id: User ID for multi-account support (default: "default")
     """
+    # Set active user before calling service
+    naver_service.set_active_user(user_id)
+    
     places = await naver_service.get_places()
-    print(f"🏪 [API /api/naver/places] Response: {places}")
+    print(f"🏪 [API /api/naver/places] User: {user_id}, Response: {places}")
     print(f"🏪 [API /api/naver/places] Type: {type(places)}")
     print(f"🏪 [API /api/naver/places] Length: {len(places) if isinstance(places, list) else 'N/A'}")
     return places
 
 
 @router.get("/reviews/{place_id}")
-async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, load_count: int = 300):
+async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, load_count: int = 300, user_id: str = "default"):
     """
     Get reviews for a specific place with pagination
     
@@ -82,18 +88,26 @@ async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, l
         page: Page number (starting from 1)
         page_size: Number of reviews per page (default 20)
         load_count: Total number of reviews to load (50/150/300/500/1000)
+        user_id: User ID for multi-account support (default: "default")
     """
+    # Set active user before calling service
+    naver_service.set_active_user(user_id)
+    
     return await naver_service.get_reviews(place_id, page=page, page_size=page_size, filter_type='all', load_count=load_count)
 
 
 @router.post("/reviews/reply")
-async def post_naver_reply(request: NaverReplyRequest):
+async def post_naver_reply(request: NaverReplyRequest, user_id: str = "default"):
     """
     Post a reply to a Naver review
     
     Args:
         request: Reply request with place_id, review_id, and reply_text
+        user_id: User ID for multi-account support (default: "default")
     """
+    # Set active user before calling service
+    naver_service.set_active_user(user_id)
+    
     return await naver_service.post_reply(
         place_id=request.place_id,
         review_id=request.review_id,
@@ -191,6 +205,64 @@ async def upload_session(session_data: NaverSessionUpload):
         raise HTTPException(status_code=500, detail=f"Session upload failed: {str(e)}")
 
 
+@router.get("/sessions/list")
+async def list_sessions():
+    """
+    Get all available Naver sessions
+    """
+    try:
+        from utils.db import get_db
+        
+        if not settings.use_mongodb or not settings.mongodb_url:
+            return {"sessions": []}
+        
+        db = get_db()
+        if db is None:
+            return {"sessions": []}
+        
+        # Get all sessions
+        sessions = list(db.naver_sessions.find({}, {
+            "_id": 1,
+            "username": 1,
+            "created_at": 1,
+            "expires_at": 1,
+            "status": 1,
+            "cookie_count": 1
+        }))
+        
+        # Format response
+        formatted_sessions = []
+        now = datetime.utcnow()
+        
+        for session in sessions:
+            user_id = session.get("_id")
+            expires_at = session.get("expires_at")
+            
+            is_expired = False
+            remaining_days = 0
+            if expires_at and now > expires_at:
+                is_expired = True
+            elif expires_at:
+                remaining_days = (expires_at - now).days
+            
+            formatted_sessions.append({
+                "user_id": user_id,
+                "username": session.get("username"),
+                "created_at": session.get("created_at").isoformat() if session.get("created_at") else None,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "remaining_days": remaining_days,
+                "is_expired": is_expired,
+                "status": "expired" if is_expired else "active",
+                "cookie_count": session.get("cookie_count", 0)
+            })
+        
+        return {"sessions": formatted_sessions}
+        
+    except Exception as e:
+        print(f"❌ Sessions list error: {str(e)}")
+        return {"sessions": []}
+
+
 @router.get("/session/status")
 async def get_session_status(user_id: str = "default"):
     """
@@ -252,6 +324,42 @@ async def get_session_status(user_id: str = "default"):
             "exists": False,
             "message": f"Error: {str(e)}"
         }
+
+
+@router.post("/session/switch")
+async def switch_session(user_id: str):
+    """
+    Switch to a different Naver account session
+    
+    This sets the active session that will be used for API calls
+    """
+    try:
+        from utils.db import get_db
+        
+        if not settings.use_mongodb or not settings.mongodb_url:
+            raise HTTPException(status_code=500, detail="MongoDB not configured")
+        
+        db = get_db()
+        if db is None:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+        
+        # Check if session exists
+        session = db.naver_sessions.find_one({"_id": user_id})
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Store active session in a separate collection or return info
+        # For now, we'll just verify and return session info
+        return {
+            "success": True,
+            "active_session": user_id,
+            "username": session.get("username"),
+            "message": f"Switched to account: {session.get('username')}"
+        }
+        
+    except Exception as e:
+        print(f"❌ Session switch error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Session switch failed: {str(e)}")
 
 
 @router.delete("/session")

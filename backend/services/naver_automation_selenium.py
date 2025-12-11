@@ -32,6 +32,9 @@ class NaverPlaceAutomationSelenium:
         self.session_file = os.path.join(settings.data_dir, "naver_sessions", "session_selenium.json")
         os.makedirs(os.path.dirname(self.session_file), exist_ok=True)
         
+        # 🚀 Multi-account support
+        self.active_user_id = "default"  # Default user
+        
         # 🚀 Performance optimization: Cache for places list
         self._places_cache: Optional[List[Dict]] = None
         self._places_cache_time: Optional[datetime] = None
@@ -59,13 +62,25 @@ class NaverPlaceAutomationSelenium:
             
             session = db.naver_sessions.find_one({"_id": user_id})
             if session and session.get('cookies'):
-                print(f"📦 Found session in MongoDB ({len(session['cookies'])} cookies)")
+                print(f"📦 Found session in MongoDB for user '{user_id}' ({len(session['cookies'])} cookies)")
+                
+                # Update last_used timestamp
+                db.naver_sessions.update_one(
+                    {"_id": user_id},
+                    {"$set": {"last_used": datetime.utcnow()}}
+                )
+                
                 return session['cookies']
             
             return None
         except Exception as e:
             logger.error(f"❌ MongoDB session load error: {e}")
             return None
+    
+    def set_active_user(self, user_id="default"):
+        """Set the active user ID for this session"""
+        self.active_user_id = user_id
+        print(f"🔄 Active user switched to: {user_id}")
     
     def _create_driver(self, headless=True):
         """Create and configure Chrome WebDriver"""
@@ -157,10 +172,10 @@ class NaverPlaceAutomationSelenium:
         # Try to load session (MongoDB first, then local file)
         cookies = None
         
-        # Priority 1: Try MongoDB (cloud storage)
-        cookies = self._load_session_from_mongodb()
+        # Priority 1: Try MongoDB (cloud storage) with active user ID
+        cookies = self._load_session_from_mongodb(self.active_user_id)
         if cookies:
-            print("✅ Using session from MongoDB (cloud)")
+            print(f"✅ Using session from MongoDB (cloud) for user: {self.active_user_id}")
         # Priority 2: Try local file (fallback)
         elif os.path.exists(self.session_file):
             print("📂 Using session from local file")
@@ -406,15 +421,16 @@ class NaverPlaceAutomationSelenium:
                 'message': 'Logged in to Naver (session file found)'
             }
         
-        # Priority 2: Check MongoDB session
+        # Priority 2: Check MongoDB session (using active user ID)
         try:
-            mongodb_session = self._load_session_from_mongodb()
+            mongodb_session = self._load_session_from_mongodb(self.active_user_id)
             if mongodb_session:
-                logger.info("✅ MongoDB session found - assuming logged in")
-                print("✅ MongoDB session found - returning logged_in=True")
+                logger.info(f"✅ MongoDB session found for user: {self.active_user_id}")
+                print(f"✅ MongoDB session found for user '{self.active_user_id}' - returning logged_in=True")
                 return {
                     'logged_in': True,
-                    'message': 'Logged in to Naver (MongoDB session found)'
+                    'message': f'Logged in to Naver (MongoDB session found for {self.active_user_id})',
+                    'active_user': self.active_user_id
                 }
         except Exception as e:
             logger.error(f"❌ MongoDB session check error: {e}")

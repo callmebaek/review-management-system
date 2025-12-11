@@ -93,37 +93,67 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
       setPosting(true)
       setError(null)
 
+      // 🚀 Optimistic Update: Update UI immediately (before API call)
+      const currentReplyText = replyText
+      const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
+      
+      // Close form and show reply immediately
+      setShowReplyForm(false)
+      
+      // Update the review object in cache (optimistic)
+      if (isNaver && placeId) {
+        queryClient.setQueryData(['naver-reviews', placeId], (oldData) => {
+          if (!oldData) return oldData
+          
+          const reviews = oldData.reviews || oldData
+          const updatedReviews = reviews.map(r => 
+            r.review_id === review.review_id 
+              ? { ...r, has_reply: true, reply: currentReplyText, reply_date: currentDate }
+              : r
+          )
+          
+          return oldData.reviews 
+            ? { ...oldData, reviews: updatedReviews }
+            : updatedReviews
+        })
+      }
+
+      // API call in background
       if (isNaver) {
         await apiClient.post('/api/naver/reviews/reply', {
           place_id: placeId,
           review_id: review.review_id,
-          reply_text: replyText
+          reply_text: currentReplyText
         })
       } else {
         await apiClient.post('/api/gbp/reviews/reply', {
           review_id: review.review_id,
-          reply_text: replyText,
+          reply_text: currentReplyText,
           location_name: locationName || review.name.split('/reviews/')[0]
         })
       }
-
-      setShowReplyForm(false)
+      
       setReplyText('')
       
-      // Show success message
-      alert('✅ 답글이 성공적으로 등록되었습니다!')
-      
-      // 🚀 Update cache immediately (for instant feedback)
-      if (isNaver && placeId) {
-        // Invalidate Naver reviews cache to trigger reload
-        queryClient.invalidateQueries(['naver-reviews', placeId])
-      }
+      // Verify after 3 seconds (silent background check)
+      setTimeout(() => {
+        if (isNaver && placeId) {
+          queryClient.invalidateQueries(['naver-reviews', placeId])
+        }
+      }, 3000)
       
       if (onReplyPosted) {
         onReplyPosted()
       }
     } catch (err) {
+      // Revert optimistic update on error
+      if (isNaver && placeId) {
+        queryClient.invalidateQueries(['naver-reviews', placeId])
+      }
+      
       setError(err.response?.data?.detail || '답글 게시 중 오류가 발생했습니다')
+      setShowReplyForm(true)
+      setReplyText(replyText)
     } finally {
       setPosting(false)
     }

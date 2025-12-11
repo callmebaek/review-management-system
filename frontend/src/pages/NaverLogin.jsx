@@ -1,43 +1,67 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../api/client'
-import { Download, CheckCircle, XCircle, AlertCircle, Info, RefreshCw, Trash2, HelpCircle } from 'lucide-react'
+import { Download, CheckCircle, XCircle, AlertCircle, Info, RefreshCw, Trash2, HelpCircle, Users } from 'lucide-react'
 
 export default function NaverLogin() {
   const navigate = useNavigate()
-  const [sessionStatus, setSessionStatus] = useState(null)
+  const [sessions, setSessions] = useState([])
+  const [activeSession, setActiveSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showGuide, setShowGuide] = useState(false)
 
-  // Check session status
+  // Check all sessions
   useEffect(() => {
-    checkSessionStatus()
+    loadSessions()
   }, [])
 
-  const checkSessionStatus = async () => {
+  const loadSessions = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get('/api/naver/session/status', { timeout: 5000 })
-      setSessionStatus(response.data)
+      const response = await apiClient.get('/api/naver/sessions/list', { timeout: 5000 })
+      setSessions(response.data.sessions || [])
+      
+      // Set first active session as default
+      if (response.data.sessions && response.data.sessions.length > 0) {
+        const active = response.data.sessions.find(s => s.user_id === 'default') || response.data.sessions[0]
+        setActiveSession(active.user_id)
+        // Store in localStorage
+        localStorage.setItem('active_naver_user', active.user_id)
+      }
+      
       setError(null)
     } catch (err) {
-      setSessionStatus({ exists: false })
-      console.log('No session found')
+      setSessions([])
+      console.log('No sessions found')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDeleteSession = async () => {
-    if (!confirm('세션을 삭제하시겠습니까? 다시 로그인해야 합니다.')) {
+  const switchSession = async (user_id) => {
+    try {
+      await apiClient.post(`/api/naver/session/switch?user_id=${user_id}`)
+      setActiveSession(user_id)
+      localStorage.setItem('active_naver_user', user_id)
+      alert(`✅ ${user_id} 계정으로 전환되었습니다!`)
+    } catch (err) {
+      alert('계정 전환 중 오류가 발생했습니다')
+    }
+  }
+
+  const handleDeleteSession = async (user_id) => {
+    if (!confirm(`'${user_id}' 세션을 삭제하시겠습니까? 다시 로그인해야 합니다.`)) {
       return
     }
     
     try {
       setLoading(true)
-      await apiClient.delete('/api/naver/session')
-      setSessionStatus({ exists: false })
+      await apiClient.delete(`/api/naver/session?user_id=${user_id}`)
+      
+      // Reload sessions
+      await loadSessions()
+      
       setError(null)
     } catch (err) {
       setError('세션 삭제 중 오류가 발생했습니다')
@@ -83,54 +107,94 @@ export default function NaverLogin() {
           <p className="text-gray-600">세션 생성 도구로 간편하게 연결하세요</p>
         </div>
 
-        {/* Session Status Card */}
-        {sessionStatus?.exists ? (
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 mb-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start">
-                <CheckCircle className="w-6 h-6 text-green-600 mr-3 mt-1 flex-shrink-0" />
-                <div>
-                  <h3 className="text-lg font-semibold text-green-900">✅ 연결됨</h3>
-                  <div className="mt-3 space-y-2 text-sm text-green-800">
-                    {sessionStatus.username && (
-                      <p><span className="font-medium">계정:</span> {sessionStatus.username}</p>
-                    )}
-                    {sessionStatus.created_at && (
-                      <p><span className="font-medium">연결 일시:</span> {formatDate(sessionStatus.created_at)}</p>
-                    )}
-                    {sessionStatus.remaining_days !== undefined && (
-                      <p>
-                        <span className="font-medium">유효 기간:</span>{' '}
-                        {sessionStatus.is_expired ? (
-                          <span className="text-red-600 font-semibold">만료됨</span>
-                        ) : sessionStatus.remaining_days === 0 ? (
-                          <span className="text-orange-600 font-semibold">오늘 만료</span>
-                        ) : (
-                          <span>{sessionStatus.remaining_days}일 남음</span>
-                        )}
-                      </p>
-                    )}
-                    <p><span className="font-medium">쿠키:</span> {sessionStatus.cookie_count || 0}개</p>
-                  </div>
-                </div>
-              </div>
+        {/* Multi-Account Sessions */}
+        {sessions.length > 0 ? (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Users className="w-5 h-5 mr-2" />
+                연결된 계정 ({sessions.length}개)
+              </h2>
               <button
-                onClick={handleDeleteSession}
+                onClick={loadSessions}
                 disabled={loading}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                title="세션 삭제"
+                className="text-sm text-gray-600 hover:text-gray-900 flex items-center"
               >
-                <Trash2 className="w-5 h-5" />
+                <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                새로고침
               </button>
             </div>
             
-            {sessionStatus.is_expired && (
-              <div className="mt-4 p-3 bg-orange-100 border border-orange-200 rounded-md">
-                <p className="text-sm text-orange-800">
-                  ⚠️ 세션이 만료되었습니다. 아래에서 세션을 다시 생성해주세요.
-                </p>
-              </div>
-            )}
+            <div className="space-y-3">
+              {sessions.map((session) => (
+                <div
+                  key={session.user_id}
+                  className={`border-2 rounded-lg p-4 transition-all ${
+                    activeSession === session.user_id
+                      ? 'bg-green-50 border-green-300 shadow-sm'
+                      : 'bg-white border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start flex-1">
+                      {activeSession === session.user_id ? (
+                        <CheckCircle className="w-5 h-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <div className="w-5 h-5 mr-3 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            {session.username || session.user_id}
+                          </h3>
+                          {activeSession === session.user_id && (
+                            <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                              활성
+                            </span>
+                          )}
+                          {session.is_expired && (
+                            <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                              만료됨
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2 space-y-1 text-xs text-gray-600">
+                          <p>계정 ID: {session.user_id}</p>
+                          <p>생성: {formatDate(session.created_at)}</p>
+                          <p>
+                            유효 기간:{' '}
+                            {session.is_expired ? (
+                              <span className="text-red-600 font-semibold">만료됨</span>
+                            ) : session.remaining_days === 0 ? (
+                              <span className="text-orange-600 font-semibold">오늘 만료</span>
+                            ) : (
+                              <span className="text-green-600">{session.remaining_days}일 남음</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-4">
+                      {activeSession !== session.user_id && !session.is_expired && (
+                        <button
+                          onClick={() => switchSession(session.user_id)}
+                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors"
+                        >
+                          전환
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteSession(session.user_id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-md transition-colors"
+                        title="삭제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
             
             <div className="mt-4 flex space-x-2">
               <button
@@ -138,13 +202,6 @@ export default function NaverLogin() {
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
               >
                 📋 네이버 리뷰 보기
-              </button>
-              <button
-                onClick={checkSessionStatus}
-                disabled={loading}
-                className="bg-white hover:bg-gray-50 text-green-600 border border-green-600 font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>

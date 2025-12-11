@@ -22,6 +22,10 @@ class NaverAutomationSeleniumWrapper:
     def __init__(self):
         self.selenium_automation = naver_automation_selenium
     
+    def set_active_user(self, user_id: str):
+        """Set active user for multi-account support"""
+        self.selenium_automation.set_active_user(user_id)
+    
     async def login(self, username: str, password: str) -> Dict:
         """Async wrapper for login"""
         async with _selenium_lock:  # Ensure only one browser operation at a time

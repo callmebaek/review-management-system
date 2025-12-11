@@ -74,7 +74,7 @@ class NaverSessionCreator:
             justify=tk.LEFT
         ).pack(pady=(0, 20))
         
-        # 아이디 입력
+        # 네이버 아이디 입력
         tk.Label(
             main_frame,
             text="네이버 아이디",
@@ -198,15 +198,18 @@ class NaverSessionCreator:
         self.is_processing = True
         self.start_button.config(state=tk.DISABLED)
         
+        # 네이버 아이디를 계정 ID로 사용 (자동)
+        account_id = username
+        
         # 별도 스레드에서 실행
         thread = threading.Thread(
             target=self.login_and_upload,
-            args=(username, password)
+            args=(account_id, username, password)
         )
         thread.daemon = True
         thread.start()
     
-    def login_and_upload(self, username, password):
+    def login_and_upload(self, account_id, username, password):
         """네이버 로그인 및 세션 업로드"""
         try:
             # 1. Chrome 드라이버 준비
@@ -312,7 +315,7 @@ class NaverSessionCreator:
                     f"{self.api_url}/api/naver/session/upload",
                     json={
                         "cookies": cookies,
-                        "user_id": "default",
+                        "user_id": account_id,  # Use account_id instead of "default"
                         "username": username
                     },
                     timeout=30
