@@ -47,8 +47,8 @@ export default function NaverLogin() {
   }
 
   const handleDownloadTool = () => {
-    // TODO: EXE 파일 다운로드 링크
-    window.open('/downloads/NaverSessionCreator.exe', '_blank')
+    // GitHub Releases에서 다운로드
+    window.open('https://github.com/callmebaek/review-management-system/releases/download/v1.0.0/NaverSessionCreator.exe', '_blank')
   }
 
   const formatDate = (dateString) => {
