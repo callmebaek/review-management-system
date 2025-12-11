@@ -51,11 +51,36 @@ async def naver_login(request: NaverLoginRequest):
 @router.get("/status")
 async def naver_login_status():
     """
-    Check Naver login status
+    Check Naver login status (checks if ANY session exists in MongoDB)
     """
-    status = await naver_service.check_login_status()
-    print(f"🔍 [API /api/naver/status] Response: {status}")
-    return status
+    try:
+        from utils.db import get_db
+        
+        # Check if any session exists in MongoDB
+        if settings.use_mongodb and settings.mongodb_url:
+            db = get_db()
+            if db:
+                # Count total sessions
+                session_count = db.naver_sessions.count_documents({})
+                if session_count > 0:
+                    print(f"🔍 [API /api/naver/status] Found {session_count} session(s) in MongoDB")
+                    # Get first active session
+                    session = db.naver_sessions.find_one({}, sort=[("last_used", -1)])
+                    return {
+                        'logged_in': True,
+                        'message': f'{session_count}개의 세션이 저장됨',
+                        'session_count': session_count,
+                        'active_user': session.get('_id') if session else None
+                    }
+        
+        # Fallback to original check_login_status
+        status = await naver_service.check_login_status()
+        print(f"🔍 [API /api/naver/status] Response: {status}")
+        return status
+        
+    except Exception as e:
+        print(f"❌ [API /api/naver/status] Error: {e}")
+        return {'logged_in': False, 'message': 'Error checking status'}
 
 
 @router.get("/places")
