@@ -852,7 +852,6 @@ class NaverPlaceAutomationSelenium:
                     break  # Stop parsing to save memory
                 
                 try:
-                try:
                     # Author
                     try:
                         author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
