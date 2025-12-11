@@ -84,14 +84,33 @@ class NaverPlaceAutomationSelenium:
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         
-        # Heroku specific
+        # Heroku specific - Memory optimization
         chrome_options.add_argument('--single-process')
         chrome_options.add_argument('--disable-setuid-sandbox')
         chrome_options.add_argument('--remote-debugging-port=9222')
         
+        # Additional memory saving options for Heroku
+        chrome_options.add_argument('--disable-background-networking')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        chrome_options.add_argument('--disable-breakpad')
+        chrome_options.add_argument('--disable-component-extensions-with-background-pages')
+        chrome_options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees')
+        chrome_options.add_argument('--disable-ipc-flooding-protection')
+        chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
+        chrome_options.add_argument('--force-color-profile=srgb')
+        chrome_options.add_argument('--hide-scrollbars')
+        chrome_options.add_argument('--metrics-recording-only')
+        chrome_options.add_argument('--mute-audio')
+        
+        # Set memory limits
+        chrome_options.add_argument('--max_old_space_size=256')
+        chrome_options.add_argument('--js-flags=--max-old-space-size=256')
+        
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--window-size=1280,720')  # Reduced from 1920x1080
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
         # Check if running on Heroku (has DYNO environment variable)
@@ -946,19 +965,33 @@ class NaverPlaceAutomationSelenium:
             }
         
         except Exception as e:
-            print(f"❌ Error: {e}")
+            error_msg = str(e)
+            print(f"❌ Error getting reviews: {error_msg}")
+            logger.error(f"❌ Error getting reviews: {error_msg}")
+            
+            # Log full traceback for debugging
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Full traceback:\n{error_trace}")
+            logger.error(f"Full traceback:\n{error_trace}")
+            
             # 🚀 Mark as error
             self._loading_progress[place_id] = {
                 'status': 'error',
                 'count': 0,
-                'message': f'❌ 오류: {str(e)[:50]}',
+                'message': f'❌ 오류: {error_msg[:50]}',
                 'timestamp': datetime.now()
             }
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=f"리뷰 로드 실패: {error_msg}")
         
         finally:
             if driver:
-                driver.quit()
+                try:
+                    print("🔄 Closing Chrome driver...")
+                    driver.quit()
+                    print("✅ Chrome driver closed")
+                except Exception as e:
+                    print(f"⚠️ Error closing driver: {e}")
     
     def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Post a reply to a review in Smartplace Center"""
