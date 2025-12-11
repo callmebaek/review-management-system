@@ -48,17 +48,19 @@ if frontend_url:
     print(f"✅ CORS: 프로덕션 프론트엔드 추가 - {frontend_url}")
 
 # Vercel 자동 배포 URL 패턴 지원
-if os.getenv("VERCEL_URL"):
-    vercel_url = f"https://{os.getenv('VERCEL_URL')}"
+vercel_url = os.getenv("VERCEL_URL")
+if vercel_url:
+    # VERCEL_URL은 https:// 없이 제공될 수 있음
+    if not vercel_url.startswith("http"):
+        vercel_url = f"https://{vercel_url}"
     allowed_origins.append(vercel_url)
     print(f"✅ CORS: Vercel URL 추가 - {vercel_url}")
 
-# Vercel 정확한 URL 추가
-allowed_origins.append("https://review-management-system-ivory.vercel.app")
-
-# Vercel 정확한 URL 명시적으로 추가
-if "https://review-management-system-ivory.vercel.app" not in allowed_origins:
-    allowed_origins.append("https://review-management-system-ivory.vercel.app")
+# 프로덕션 Vercel URL (기본값, 환경 변수로 덮어쓸 수 있음)
+default_vercel = "https://review-management-system-ivory.vercel.app"
+if default_vercel not in allowed_origins:
+    allowed_origins.append(default_vercel)
+    print(f"✅ CORS: 기본 Vercel URL 추가 - {default_vercel}")
 
 print(f"🔧 CORS allowed_origins: {allowed_origins}")
 

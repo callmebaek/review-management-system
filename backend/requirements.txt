@@ -25,3 +25,16 @@ aiofiles==23.2.1
 # MongoDB
 pymongo==4.6.1
 
+# Production Server (Heroku)
+gunicorn==21.2.0
+
+
+
+
+
+
+
+
+
+
+

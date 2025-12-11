@@ -79,6 +79,9 @@ backend/data/naver_sessions/*.json
 !tailwind.config.js
 !postcss.config.js
 
+# Heroku
+.env.heroku
+
 
 
 
