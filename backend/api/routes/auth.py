@@ -92,12 +92,13 @@ async def google_callback(request: Request):
         token_manager.save_token(user_id, credentials)
         
         # Redirect to frontend success page
-        frontend_url = f"http://localhost:{settings.frontend_port}"
+        # Use FRONTEND_URL from environment, fallback to localhost for local dev
+        frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
         return RedirectResponse(url=f"{frontend_url}/dashboard?auth=success")
         
     except Exception as e:
         # Redirect to frontend with error
-        frontend_url = f"http://localhost:{settings.frontend_port}"
+        frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
         return RedirectResponse(url=f"{frontend_url}/login?error={str(e)}")
 
 
