@@ -15,6 +15,7 @@ openai==1.10.0
 
 # Naver Place Automation (Stage 2)
 playwright==1.40.0
+selenium==4.16.0
 
 # Utilities
 python-multipart==0.0.6
