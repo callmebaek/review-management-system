@@ -55,32 +55,53 @@ async def naver_login_status():
     """
     try:
         from utils.db import get_db
+        import traceback
         
         # Check if any session exists in MongoDB
         if settings.use_mongodb and settings.mongodb_url:
+            print("🔍 [API /api/naver/status] Checking MongoDB...")
             db = get_db()
-            if db:
+            if db is not None:
                 # Count total sessions
                 session_count = db.naver_sessions.count_documents({})
+                print(f"🔍 [API /api/naver/status] Session count: {session_count}")
+                
                 if session_count > 0:
-                    print(f"🔍 [API /api/naver/status] Found {session_count} session(s) in MongoDB")
-                    # Get first active session
-                    session = db.naver_sessions.find_one({}, sort=[("last_used", -1)])
+                    print(f"✅ [API /api/naver/status] Found {session_count} session(s) in MongoDB!")
+                    
+                    # Get most recently used session
+                    try:
+                        sessions_cursor = db.naver_sessions.find({}).sort("last_used", -1).limit(1)
+                        sessions_list = list(sessions_cursor)
+                        active_user = sessions_list[0].get('_id') if sessions_list else None
+                    except Exception as sort_err:
+                        print(f"⚠️ Sort error: {sort_err}, using any session")
+                        active_user = None
+                    
                     return {
                         'logged_in': True,
                         'message': f'{session_count}개의 세션이 저장됨',
                         'session_count': session_count,
-                        'active_user': session.get('_id') if session else None
+                        'active_user': active_user
                     }
+                else:
+                    print("❌ [API /api/naver/status] No sessions in MongoDB")
+            else:
+                print("❌ [API /api/naver/status] MongoDB connection failed")
+        else:
+            print(f"⚠️ [API /api/naver/status] MongoDB not enabled (use_mongodb: {settings.use_mongodb})")
         
         # Fallback to original check_login_status
+        print("🔄 [API /api/naver/status] Fallback to check_login_status")
         status = await naver_service.check_login_status()
         print(f"🔍 [API /api/naver/status] Response: {status}")
         return status
         
     except Exception as e:
         print(f"❌ [API /api/naver/status] Error: {e}")
-        return {'logged_in': False, 'message': 'Error checking status'}
+        import traceback
+        traceback.print_exc()
+        return {'logged_in': False, 'message': f'Error checking status: {str(e)}'}
 
 
 @router.get("/places")
