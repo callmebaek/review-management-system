@@ -779,10 +779,10 @@ class NaverPlaceAutomationSelenium:
             last_count = 0
             no_change = 0
             
-            # 🚀 AGGRESSIVE MEMORY OPTIMIZATION: Reduce scroll attempts
-            # For Heroku's limited memory, we prioritize speed over completeness
-            max_scrolls = min(30, TARGET_LOAD_COUNT // 2)  # Much more conservative
-            print(f"🎯 Max scrolls limited to: {max_scrolls} (memory optimization)")
+            # 🚀 Smart scroll calculation (balanced)
+            # Each scroll loads ~3-5 reviews, so divide by 3 and add buffer
+            max_scrolls = max(20, min(100, (TARGET_LOAD_COUNT // 3) + 20))
+            print(f"🎯 Max scrolls: {max_scrolls} for target {TARGET_LOAD_COUNT}")
             
             for i in range(max_scrolls):
                 try:
@@ -812,8 +812,8 @@ class NaverPlaceAutomationSelenium:
                         print(f"  ✅ Reached target {TARGET_LOAD_COUNT}!")
                         break
                     
-                    # 🚀 More aggressive early exit (3 attempts instead of 5)
-                    if no_change >= 3:
+                    # 🚀 Early exit (5 attempts without change)
+                    if no_change >= 5:
                         print(f"  ⚠️ No more content loading (stopped at {current_count} reviews).")
                         break
                     
@@ -823,8 +823,8 @@ class NaverPlaceAutomationSelenium:
                     else:
                         driver.execute_script("window.scrollBy(0, 1000);")
                     
-                    # 🚀 CRITICAL: Reduce wait time (0.5 → 0.3 seconds)
-                    time.sleep(0.3)
+                    # 🚀 Balanced wait time for page rendering
+                    time.sleep(0.5)
                     
                 except Exception as e:
                     print(f"  ⚠️ Scroll error: {e}")
@@ -833,24 +833,41 @@ class NaverPlaceAutomationSelenium:
                         break
                     no_change += 1
             
-            # 🚀 STEP 4: Parse Data (FAST MODE for Heroku)
+            # 🚀 STEP 4: Parse Data
             print(f"🔍 Parsing {last_count} reviews...")
             self._loading_progress[place_id]['message'] = f'📝 {last_count}개 리뷰 파싱 중...'
             all_reviews = []
             
-            # Get total count first (quick)
-            total_count = last_count  # Use loaded count as total
+            # 🚀 Get REAL total count from page
+            total_count = 0
+            try:
+                import re
+                # Find "전체 XX개" or "방문자 리뷰 XX" pattern
+                page_text = driver.find_element(By.TAG_NAME, 'body').text
+                # Try multiple patterns
+                patterns = [
+                    r'전체\s*(\d+)',
+                    r'방문자\s*리뷰\s*(\d+)',
+                    r'리뷰\s*(\d+)',
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, page_text)
+                    if match:
+                        total_count = int(match.group(1))
+                        print(f"📊 Found total count: {total_count} (pattern: {pattern})")
+                        break
+                
+                if total_count == 0:
+                    print(f"⚠️ Could not find total count, using loaded count: {last_count}")
+                    total_count = last_count
+            except Exception as e:
+                print(f"⚠️ Error getting total count: {e}, using loaded count")
+                total_count = last_count
             
             lis = driver.find_elements(By.TAG_NAME, "li")
-            
-            # 🚀 MEMORY: Parse only what we need, skip rest
-            max_parse = min(len(lis), TARGET_LOAD_COUNT + 10)  # Parse a bit more than target
-            print(f"🎯 Parsing first {max_parse} elements (out of {len(lis)})")
+            print(f"🎯 Parsing all {len(lis)} elements")
             
             for idx, li in enumerate(lis):
-                if idx >= max_parse:
-                    break  # Stop parsing to save memory
-                
                 try:
                     # Author
                     try:
