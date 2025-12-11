@@ -212,6 +212,16 @@ class NaverSessionCreator:
     def login_and_upload(self, account_id, username, password):
         """네이버 로그인 및 세션 업로드"""
         try:
+            # 0. Heroku 서버 깨우기 (Cold Start 방지)
+            self.update_progress("🔌 서버 연결 확인 중...", 5)
+            try:
+                print("🔌 Warming up Heroku server...")
+                ping_response = requests.get(f"{self.api_url}/health", timeout=60)
+                print(f"✅ Server is awake: {ping_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ Server ping warning: {e}")
+                # Continue anyway
+            
             # 1. Chrome 드라이버 준비
             self.update_progress("⏳ Chrome 브라우저 준비 중...", 10)
             
@@ -308,26 +318,50 @@ class NaverSessionCreator:
                 self.update_progress("💾 세션 데이터 추출 중...", 90)
                 cookies = self.driver.get_cookies()
                 
-                # 7. 서버에 업로드
+                # 7. 서버에 업로드 (재시도 로직 포함)
                 self.update_progress(f"⬆️ 서버에 업로드 중... ({len(cookies)}개 쿠키)", 95)
                 
-                response = requests.post(
-                    f"{self.api_url}/api/naver/session/upload",
-                    json={
-                        "cookies": cookies,
-                        "user_id": account_id,  # Use account_id instead of "default"
-                        "username": username
-                    },
-                    timeout=30
-                )
+                max_retries = 3
+                upload_success = False
+                last_error = None
                 
-                if response.status_code == 200:
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            print(f"🔄 업로드 재시도 {attempt + 1}/{max_retries}...")
+                            self.update_progress(f"🔄 재시도 중... ({attempt + 1}/{max_retries})", 95)
+                            time.sleep(2)  # Wait before retry
+                        
+                        response = requests.post(
+                            f"{self.api_url}/api/naver/session/upload",
+                            json={
+                                "cookies": cookies,
+                                "user_id": account_id,
+                                "username": username
+                            },
+                            timeout=90
+                        )
+                        
+                        if response.status_code == 200:
+                            upload_success = True
+                            break
+                        else:
+                            last_error = f"HTTP {response.status_code}: {response.text[:100]}"
+                            
+                    except requests.exceptions.Timeout:
+                        last_error = "서버 응답 시간 초과 (90초)"
+                        print(f"⏰ Timeout on attempt {attempt + 1}")
+                    except Exception as e:
+                        last_error = str(e)
+                        print(f"❌ Upload error on attempt {attempt + 1}: {e}")
+                
+                if upload_success:
                     self.update_progress("🎉 완료!", 100)
                     
                     # 성공 다이얼로그
                     self.window.after(0, lambda: self.show_success(len(cookies)))
                 else:
-                    raise Exception(f"서버 업로드 실패: {response.status_code}")
+                    raise Exception(f"서버 업로드 실패 ({max_retries}회 시도): {last_error}")
             else:
                 raise Exception("로그인에 실패했습니다. 다시 시도해주세요.")
         
