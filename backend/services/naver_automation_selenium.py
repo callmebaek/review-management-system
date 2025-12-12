@@ -1127,17 +1127,43 @@ class NaverPlaceAutomationSelenium:
             time.sleep(2)
             
             # Fill textarea (JavaScript)
+            print("⌨️  Waiting for textarea...")
             textarea = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "textarea"))
             )
+            
+            print(f"⌨️  Filling reply: {reply_text[:30]}...")
             driver.execute_script("arguments[0].value = arguments[1];", textarea, reply_text)
+            driver.execute_script("arguments[0].focus();", textarea)
+            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
             time.sleep(1)
             
-            # Submit
-            submit_btns = driver.find_elements(By.XPATH, "//button[contains(., '등록')]")
-            if submit_btns:
-                driver.execute_script("arguments[0].click();", submit_btns[-1])
-                time.sleep(4)
+            # 🚀 target_review 내에서만 "등록" 찾기
+            print("📤 Finding '등록' button in target review...")
+            try:
+                submit_btn = target_review.find_element(By.XPATH, ".//button[contains(text(), '등록')]")
+                print("✅ Found '등록' in target review")
+            except:
+                print("⚠️ Not in target, searching all visible buttons...")
+                all_btns = driver.find_elements(By.XPATH, "//button[contains(., '등록')]")
+                visible = [b for b in all_btns if b.is_displayed()]
+                submit_btn = visible[-1] if visible else None
+                if not submit_btn:
+                    raise Exception("No '등록' button found")
+                print(f"✅ Found visible '등록' (index {len(visible)-1})")
+            
+            print("🖱️  Clicking '등록'...")
+            driver.execute_script("arguments[0].click();", submit_btn)
+            time.sleep(5)
+            
+            # 검증
+            print("🔍 Verifying reply...")
+            time.sleep(2)
+            try:
+                reply_elem = target_review.find_element(By.CLASS_NAME, "pui__GbW8H7")
+                print(f"✅ Reply verified: {reply_elem.text[:30]}...")
+            except:
+                print("⚠️ Could not verify reply element")
             
             print(f"✅ Reply posted successfully!")
             
