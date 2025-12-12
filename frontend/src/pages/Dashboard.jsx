@@ -121,8 +121,12 @@ export default function Dashboard() {
       const googleEmail = localStorage.getItem('google_email')
       const isLoggedIn = localStorage.getItem('user_logged_in')
       
-      if (!googleEmail || !isLoggedIn) {
-        console.log('❌ Not logged in, redirecting...')
+      // 🔐 'default'는 로그인 실패로 간주
+      if (!googleEmail || !isLoggedIn || googleEmail === 'default') {
+        console.log('❌ Not logged in or invalid email, redirecting...')
+        localStorage.removeItem('user_logged_in')
+        localStorage.removeItem('google_email')
+        localStorage.removeItem('google_name')
         navigate('/login')
         return { authenticated: false }
       }

@@ -14,7 +14,8 @@ export default function Login() {
     const googleEmail = localStorage.getItem('google_email')
     const isLoggedIn = localStorage.getItem('user_logged_in')
     
-    if (googleEmail && isLoggedIn === 'true') {
+    // 🔐 'default'는 로그인 실패로 간주
+    if (googleEmail && googleEmail !== 'default' && isLoggedIn === 'true') {
       // Google 로그인되어 있으면 Dashboard로
       console.log(`✅ Already logged in as: ${googleEmail}`)
       navigate('/dashboard')
@@ -24,7 +25,13 @@ export default function Login() {
     // Handle error from callback
     const errorParam = searchParams.get('error')
     if (errorParam) {
-      setError(errorParam)
+      // 🔐 에러 메시지를 사용자 친화적으로 변환
+      const errorMessages = {
+        'google_auth_failed': 'Google 계정 정보를 가져올 수 없습니다. 다시 시도해주세요.',
+        'no_email': 'Google 계정의 이메일 정보가 없습니다.',
+        'access_denied': '접근이 거부되었습니다.'
+      }
+      setError(errorMessages[errorParam] || errorParam)
     }
   }, [navigate, searchParams])
 

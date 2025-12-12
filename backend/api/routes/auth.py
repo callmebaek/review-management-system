@@ -94,12 +94,19 @@ async def google_callback(request: Request):
             # Get user info from Google
             service = build('oauth2', 'v2', credentials=credentials)
             user_info = service.userinfo().get().execute()
-            user_email = user_info.get('email', 'unknown')
+            user_email = user_info.get('email', None)
             user_name = user_info.get('name', '')
+            
+            # 🔐 이메일을 가져오지 못하면 에러 처리
+            if not user_email:
+                raise Exception("Failed to get email from Google")
+            
             print(f"✅ Google user logged in: {user_email} ({user_name})")
-        except:
-            user_email = "default"
-            user_name = "Unknown"
+        except Exception as e:
+            print(f"❌ Failed to get Google user info: {e}")
+            # 프론트엔드에 에러 전달
+            frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
+            return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
         
         # Save credentials with email as user ID
         user_id = user_email

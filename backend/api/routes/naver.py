@@ -54,9 +54,13 @@ async def naver_login(request: NaverLoginRequest):
 
 
 @router.get("/status")
-async def naver_login_status():
+async def naver_login_status(
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
-    Check Naver login status (checks if ANY session exists in MongoDB)
+    Check Naver login status for current Google user
+    
+    🔐 보안: 현재 구글 계정의 세션만 확인
     """
     try:
         from utils.db import get_db
@@ -64,19 +68,25 @@ async def naver_login_status():
         
         # Check if any session exists in MongoDB
         if settings.use_mongodb and settings.mongodb_url:
-            print("🔍 [API /api/naver/status] Checking MongoDB...")
+            print(f"🔍 [API /api/naver/status] Checking for: {google_email}")
             db = get_db()
             if db is not None:
-                # Count total sessions
-                session_count = db.naver_sessions.count_documents({})
+                # 🔐 Google 이메일이 있으면 해당 유저의 세션만 확인
+                query = {}
+                if google_email and google_email != "default":
+                    query["google_emails"] = google_email
+                    print(f"🔒 Filtering sessions by: {google_email}")
+                
+                # Count sessions for this user
+                session_count = db.naver_sessions.count_documents(query)
                 print(f"🔍 [API /api/naver/status] Session count: {session_count}")
                 
                 if session_count > 0:
-                    print(f"✅ [API /api/naver/status] Found {session_count} session(s) in MongoDB!")
+                    print(f"✅ [API /api/naver/status] Found {session_count} session(s)!")
                     
                     # Get most recently used session
                     try:
-                        sessions_cursor = db.naver_sessions.find({}).sort("last_used", -1).limit(1)
+                        sessions_cursor = db.naver_sessions.find(query).sort("last_used", -1).limit(1)
                         sessions_list = list(sessions_cursor)
                         active_user = sessions_list[0].get('_id') if sessions_list else None
                     except Exception as sort_err:
@@ -87,10 +97,16 @@ async def naver_login_status():
                         'logged_in': True,
                         'message': f'{session_count}개의 세션이 저장됨',
                         'session_count': session_count,
-                        'active_user': active_user
+                        'active_user': active_user,
+                        'google_email': google_email  # 디버깅용
                     }
                 else:
-                    print("❌ [API /api/naver/status] No sessions in MongoDB")
+                    print(f"❌ [API /api/naver/status] No sessions for: {google_email}")
+                    return {
+                        'logged_in': False,
+                        'message': '네이버 세션이 없습니다',
+                        'google_email': google_email
+                    }
             else:
                 print("❌ [API /api/naver/status] MongoDB connection failed")
         else:
