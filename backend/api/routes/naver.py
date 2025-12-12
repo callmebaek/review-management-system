@@ -428,22 +428,44 @@ async def upload_session(
         if db is None:
             raise HTTPException(status_code=500, detail="Database connection failed")
         
-        # 🚀 Google 계정과 연결
+        # 🚀 Google 계정 연결 (다대다 - 여러 계정이 같은 세션 사용 가능)
         if not google_email:
-            google_email = "public"  # Google 로그인 없이 업로드한 경우 (호환성)
+            google_email = "public"
         
-        # Prepare session document
-        session_doc = {
-            "_id": session_data.user_id,
-            "username": session_data.username,
-            "google_email": google_email,  # 🚀 Google 계정 연결
-            "cookies": session_data.cookies,
-            "created_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(days=7),
-            "last_used": datetime.utcnow(),
-            "status": "active",
-            "cookie_count": len(session_data.cookies)
-        }
+        # 기존 세션 확인
+        existing_session = db.naver_sessions.find_one({"_id": session_data.user_id})
+        
+        if existing_session:
+            # 🚀 기존 세션에 Google 계정 추가 (중복 방지)
+            google_emails = existing_session.get("google_emails", [])
+            if google_email not in google_emails:
+                google_emails.append(google_email)
+                print(f"✅ Added {google_email} to session {session_data.user_id}")
+            
+            session_doc = {
+                "_id": session_data.user_id,
+                "username": session_data.username,
+                "google_emails": google_emails,  # 배열!
+                "cookies": session_data.cookies,
+                "created_at": existing_session.get("created_at", datetime.utcnow()),
+                "expires_at": datetime.utcnow() + timedelta(days=7),
+                "last_used": datetime.utcnow(),
+                "status": "active",
+                "cookie_count": len(session_data.cookies)
+            }
+        else:
+            # 🚀 새 세션 생성
+            session_doc = {
+                "_id": session_data.user_id,
+                "username": session_data.username,
+                "google_emails": [google_email],  # 배열로 시작!
+                "cookies": session_data.cookies,
+                "created_at": datetime.utcnow(),
+                "expires_at": datetime.utcnow() + timedelta(days=7),
+                "last_used": datetime.utcnow(),
+                "status": "active",
+                "cookie_count": len(session_data.cookies)
+            }
         
         # Upsert to MongoDB
         db.naver_sessions.replace_one(
@@ -489,10 +511,10 @@ async def list_sessions(google_email: str = None):
         if db is None:
             return {"sessions": []}
         
-        # 🚀 Google 계정별 필터링
+        # 🚀 Google 계정별 필터링 (배열에서 검색)
         query = {}
         if google_email:
-            query["google_email"] = google_email
+            query["google_emails"] = google_email  # 배열에 포함된 것 찾기
             print(f"🔍 Fetching sessions for: {google_email}")
         else:
             print("⚠️ Fetching all sessions (no filter)")

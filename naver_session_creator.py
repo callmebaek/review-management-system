@@ -22,8 +22,8 @@ class NaverSessionCreator:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("네이버 세션 생성기 v1.0")
-        self.window.geometry("500x700")  # 600 → 700으로 증가
-        self.window.resizable(False, False)
+        self.window.geometry("500x750")  # 700 → 750으로 증가
+        self.window.resizable(True, True)  # 크기 조절 가능하게
         
         # API 설정
         self.api_url = "https://review-management-system-5bc2651ced45.herokuapp.com"
@@ -164,16 +164,16 @@ class NaverSessionCreator:
         )
         self.progress_bar.pack(pady=(0, 15))
         
-        # 🚀 다른 계정 추가 옵션
+        # 🚀 다른 Google 계정 추가 옵션
         self.add_another_var = tk.BooleanVar(value=False)
         add_another_check = tk.Checkbutton(
             main_frame,
-            text="✅ 완료 후 다른 네이버 계정 추가 (같은 Google 계정에)",
+            text="✅ 완료 후 다른 Google 계정 추가 (같은 네이버 세션에)",
             variable=self.add_another_var,
             font=("맑은 고딕", 9),
             fg="#4F46E5"
         )
-        add_another_check.pack(pady=(0, 15))
+        add_another_check.pack(pady=(0, 10))
         
         # 버튼 프레임
         button_frame = tk.Frame(main_frame)
@@ -532,21 +532,21 @@ class NaverSessionCreator:
             self.window.quit()
     
     def add_another_account(self, success_window, google_email):
-        """다른 네이버 계정 추가"""
+        """다른 Google 계정 추가 (같은 네이버 세션에)"""
         success_window.destroy()
         
-        # Google Email 자동 입력
+        # Google Email 초기화 (새로운 계정 입력)
         self.google_email_entry.delete(0, tk.END)
-        self.google_email_entry.insert(0, google_email)
         
-        # 네이버 정보 초기화
-        self.username_entry.delete(0, tk.END)
-        self.password_entry.delete(0, tk.END)
+        # 네이버 정보는 유지 (같은 세션)
+        # (자동으로 남아있음)
+        
+        # 진행률 초기화
         self.update_progress("대기 중...", 0)
         
         messagebox.showinfo(
-            "다른 계정 추가",
-            f"Google: {google_email}\n\n다른 네이버 계정을 입력하세요."
+            "다른 Google 계정 추가",
+            "같은 네이버 세션에 다른 Google 계정을 추가합니다.\n\n새로운 Google Email을 입력하고 로그인하세요."
         )
     
     def run(self):
