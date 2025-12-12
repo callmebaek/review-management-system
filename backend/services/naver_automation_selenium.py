@@ -1269,9 +1269,44 @@ class NaverPlaceAutomationSelenium:
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)
             time.sleep(1)
             
-            # 🚀 CRITICAL: "답글 쓰기" 버튼 클릭
-            print("🖱️  Clicking '답글 쓰기' button...")
-            reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
+            # 🛡️ 답글이 이미 있는지 확인
+            print("🔍 Checking if reply already exists...")
+            try:
+                existing_reply = target_review.find_element(By.CLASS_NAME, "pui__GbW8H7")
+                if existing_reply:
+                    print("⚠️ Reply already exists!")
+                    raise Exception("이미 답글이 존재하는 리뷰입니다. 답글을 수정하려면 네이버에서 직접 수정해주세요.")
+            except Exception as e:
+                if "이미 답글이 존재" in str(e):
+                    raise
+                # 답글이 없으면 정상 (NoSuchElementException)
+                print("✅ No existing reply, safe to proceed")
+            
+            # 🚀 CRITICAL: "답글 쓰기" 버튼 찾기 및 클릭
+            print("🖱️  Finding '답글' button...")
+            reply_btn = None
+            
+            # 여러 가지 방법으로 시도 (안정성 향상)
+            try:
+                # 방법 1: "답글" 텍스트 포함
+                reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
+                print("✅ Found by '답글' text")
+            except:
+                try:
+                    # 방법 2: "답글 쓰기" 전체 텍스트
+                    reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글 쓰기')]")
+                    print("✅ Found by '답글 쓰기' text")
+                except:
+                    try:
+                        # 방법 3: "답글달기" (띄어쓰기 없는 경우)
+                        reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글달기')]")
+                        print("✅ Found by '답글달기' text")
+                    except:
+                        print("❌ Could not find reply button")
+                        raise Exception("답글 버튼을 찾을 수 없습니다. 이미 답글이 있거나 페이지 로딩이 완료되지 않았습니다.")
+            
+            # 버튼 클릭
+            print("🖱️  Clicking reply button...")
             driver.execute_script("arguments[0].click();", reply_btn)
             time.sleep(2)
             print("✅ Reply form opened")
@@ -1282,12 +1317,33 @@ class NaverPlaceAutomationSelenium:
                 EC.presence_of_element_located((By.TAG_NAME, "textarea"))
             )
             
-            print(f"⌨️  Filling reply with send_keys: {reply_text[:30]}...")
+            # 🛡️ BMP 문자 필터링 (이모지 및 특수 문자 제거)
+            def remove_non_bmp(text):
+                """
+                ChromeDriver가 지원하지 않는 BMP 밖의 문자 제거
+                (이모지, 특수 유니코드 등)
+                """
+                # BMP 범위: U+0000 ~ U+FFFF
+                return ''.join(c for c in text if ord(c) <= 0xFFFF)
+            
+            # 원본 텍스트 보관 (로깅용)
+            original_reply_text = reply_text
+            
+            # 🔥 BMP 필터링 (에러 방지)
+            reply_text_safe = remove_non_bmp(reply_text)
+            
+            # 필터링 결과 로깅
+            if len(reply_text_safe) < len(original_reply_text):
+                removed_chars = len(original_reply_text) - len(reply_text_safe)
+                print(f"⚠️  Removed {removed_chars} non-BMP characters (emojis/special chars)")
+            
+            print(f"⌨️  Filling reply with send_keys: {reply_text_safe[:30]}...")
             textarea.clear()
             time.sleep(0.5)
             
             # 🚀 CRITICAL: send_keys()로 실제 키 입력 (React 이벤트 트리거)
-            textarea.send_keys(reply_text)
+            # 필터링된 텍스트 사용 (BMP만)
+            textarea.send_keys(reply_text_safe)
             time.sleep(1)
             
             print("✅ Text input completed")
