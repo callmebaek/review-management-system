@@ -316,16 +316,16 @@ async def post_reply_async(
                 
                 task_manager.update_progress(task_id, 0, '답글 게시 중...')
                 
-            # 🚀 작성자 + 날짜 + 내용 3중 매칭
-            result = naver_automation_selenium.post_reply_by_composite(
-                place_id=place_id,
-                author=author,
-                date=date,
-                content=content,
-                reply_text=reply_text,
-                user_id=user_id
-            )
-            
+                # 🚀 작성자 + 날짜 + 내용 3중 매칭
+                result = naver_automation_selenium.post_reply_by_composite(
+                    place_id=place_id,
+                    author=author,
+                    date=date,
+                    content=content,
+                    reply_text=reply_text,
+                    user_id=user_id
+                )
+                
                 task_manager.set_result(task_id, result)
                 task_manager.update_task_status(task_id, 'completed')
                 task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
