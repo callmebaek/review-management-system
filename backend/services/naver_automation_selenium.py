@@ -1044,6 +1044,8 @@ class NaverPlaceAutomationSelenium:
         한국어, *, 영어 등 모든 문자 처리
         user_id를 파라미터로 받아서 thread-safe하게 처리
         """
+        import re  # 🚀 함수 시작 부분에 import
+        
         driver = None
         try:
             print(f"💬 Posting reply to: {author} ({date}) for user: {user_id}")
