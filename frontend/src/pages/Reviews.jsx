@@ -309,10 +309,22 @@ export default function Reviews() {
               {loadCountOptions.map(option => (
                 <button
                   key={option.count}
-                  onClick={() => {
+                  onClick={async () => {
+                    console.log(`🔵 Option clicked: ${option.count}`)
                     setSelectedLoadCount(option.count)
                     setHasSelectedCount(true)
                     setShowLoadCountModal(false)
+                    
+                    // 🚀 즉시 비동기 로딩 시작
+                    setTimeout(async () => {
+                      console.log('🚀 Starting async loading from option button...')
+                      try {
+                        await startAsyncLoading()
+                      } catch (err) {
+                        console.error('❌ Async loading error:', err)
+                        alert('리뷰 로딩 시작 실패')
+                      }
+                    }, 100)
                   }}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     selectedLoadCount === option.count

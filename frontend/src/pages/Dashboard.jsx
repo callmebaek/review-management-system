@@ -13,8 +13,33 @@ export default function Dashboard() {
   
   // 🚀 State로 active user 관리 (localStorage 변경 감지)
   const [activeNaverUser, setActiveNaverUser] = useState(
-    () => localStorage.getItem('active_naver_user') || 'default'
+    () => localStorage.getItem('active_naver_user') || null
   )
+  
+  // 🚀 자동 활성 계정 설정
+  useEffect(() => {
+    const initializeActiveUser = async () => {
+      // localStorage에 active user가 없으면 자동 설정
+      if (!activeNaverUser || activeNaverUser === 'null') {
+        try {
+          console.log('🔄 No active user, fetching sessions...')
+          const response = await apiClient.get('/api/naver/sessions/list')
+          const sessions = response.data.sessions || []
+          
+          if (sessions.length > 0) {
+            const firstSession = sessions[0].user_id
+            console.log(`✅ Auto-selecting first session: ${firstSession}`)
+            setActiveNaverUser(firstSession)
+            localStorage.setItem('active_naver_user', firstSession)
+          }
+        } catch (err) {
+          console.error('Failed to auto-select session:', err)
+        }
+      }
+    }
+    
+    initializeActiveUser()
+  }, [])
 
   useEffect(() => {
     if (searchParams.get('auth') === 'success') {
