@@ -1071,87 +1071,171 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
-            # 🚀 목표 개수만큼 렌더링될 때까지 스크롤
-            print(f"📜 Scrolling to render at least {expected_count} reviews...")
+            # 🚀 점진적 로딩 전략: 10개씩 렌더링하면서 찾기 (속도 향상!)
+            print(f"🚀 Progressive loading: Searching in chunks of 10 reviews...")
+            print(f"🎯 Target: author='{author[:3]}...', date='{date}'")
             
             scroll_count = 0
             max_scrolls = 20
+            target_review = None
+            batch_size = 10  # 10개씩 처리
+            last_check_count = 0  # 마지막으로 확인한 리뷰 개수
             
-            while scroll_count < max_scrolls:
-                # 현재 리뷰 요소 개수
-                current_lis = driver.find_elements(By.TAG_NAME, "li")
-                valid_count = sum(1 for li in current_lis
-                    if any(li.find_elements(By.CLASS_NAME, "pui__JiVbY3")))
+            while scroll_count < max_scrolls and not target_review:
+                # 현재 페이지의 모든 요소 가져오기
+                all_lis = driver.find_elements(By.TAG_NAME, "li")
                 
-                print(f"  📜 Scroll {scroll_count + 1}: {len(current_lis)} elements ({valid_count} valid reviews)")
+                # 유효한 리뷰만 필터링 (작성자 요소가 있는 것)
+                valid_reviews = []
+                for li in all_lis:
+                    try:
+                        li.find_element(By.CLASS_NAME, "pui__JiVbY3")
+                        valid_reviews.append(li)
+                    except:
+                        continue
                 
-                # 목표 개수 도달하면 중단
-                if valid_count >= expected_count:
-                    print(f"  ✅ Reached target: {valid_count} >= {expected_count}")
+                current_count = len(valid_reviews)
+                newly_loaded = current_count - last_check_count
+                
+                print(f"  📦 Batch {scroll_count + 1}: {current_count} total reviews ({newly_loaded} newly loaded)")
+                
+                # 🔍 새로 로드된 리뷰에서만 검색 (효율적!)
+                search_start_idx = max(0, last_check_count)
+                search_reviews = valid_reviews[search_start_idx:]
+                
+                if search_reviews:
+                    print(f"  🔍 Searching in reviews [{search_start_idx}:{current_count}]...")
+                    
+                    # 🎯 타겟 리뷰 찾기 (작성자 + 날짜 + 내용 매칭)
+                    for idx, li in enumerate(search_reviews):
+                        try:
+                            # 작성자 가져오기
+                            try:
+                                li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                            except:
+                                continue
+                            
+                            # 날짜 가져오기
+                            li_date = ""
+                            try:
+                                d_elems = li.find_elements(By.CLASS_NAME, "pui__m7nkds")
+                                for d in d_elems:
+                                    if re.search(r'20\d{2}\.', d.text):
+                                        li_date = d.text.strip()
+                                        break
+                            except:
+                                continue
+                            
+                            # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
+                            date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
+                            li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
+                            
+                            # 작성자 매칭 (앞 3글자)
+                            author_prefix = author[:min(3, len(author))]
+                            author_match = li_author.startswith(author_prefix)
+                            date_match = li_date_clean == date_clean
+                            
+                            # 내용 매칭 (있으면)
+                            content_match = True
+                            if content and len(content) > 10:
+                                try:
+                                    li_content = li.find_element(By.CLASS_NAME, "pui__vn15t2").text.strip()
+                                    content_match = content[:50] in li_content[:100]
+                                except:
+                                    content_match = True
+                            
+                            # 🎯 매칭 성공!
+                            if author_match and date_match and content_match:
+                                print(f"  ✅ Found at position {search_start_idx + idx}: '{li_author}' ({li_date_clean})")
+                                target_review = li
+                                break
+                                
+                        except Exception as e:
+                            # 개별 리뷰 파싱 실패 시 계속 진행 (에러 방지)
+                            continue
+                    
+                    if target_review:
+                        print(f"🎉 Target review found after {scroll_count + 1} batches!")
+                        break
+                
+                # 🚀 목표 개수에 도달했거나 더 이상 로드할 것이 없으면 중단
+                if current_count >= expected_count:
+                    print(f"  ℹ️ Reached expected count: {current_count} >= {expected_count}")
+                    if not target_review:
+                        print(f"  ⚠️ Target not found yet, searching all loaded reviews...")
+                        # 전체 다시 검색 (혹시 놓친 것이 있을 수 있음)
+                        break
+                    else:
+                        break
+                
+                # 새로 로드된 리뷰가 없으면 더 이상 스크롤 안 함
+                if newly_loaded == 0 and scroll_count > 2:
+                    print(f"  ℹ️ No new reviews loaded, stopping scroll")
                     break
                 
-                # 스크롤
+                # 다음 배치를 위해 스크롤
+                last_check_count = current_count
                 driver.execute_script("window.scrollBy(0, 1500);")
                 time.sleep(1)
                 scroll_count += 1
             
-            # 맨 위로 스크롤
-            driver.execute_script("window.scrollTo(0, 0);")
-            time.sleep(1)
-            print(f"✅ Rendered {valid_count} reviews (target: {expected_count})")
-            
-            # 🚀 작성자 + 날짜로 찾기 (2중 매칭)
-            print(f"🔍 Finding review by author: '{author}' and date: '{date}'")
-            all_lis = driver.find_elements(By.TAG_NAME, "li")
-            print(f"📋 Found {len(all_lis)} total elements on page")
-            
-            target_review = None
-            for li in all_lis:
-                try:
-                    # 작성자 가져오기 (한국어, *, 영어 모두 처리)
+            # 🔍 타겟을 못 찾았으면 전체 다시 검색 (안전장치)
+            if not target_review:
+                print(f"⚠️ Not found in progressive search, searching all {len(valid_reviews)} reviews...")
+                
+                # 맨 위로 스크롤
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(1)
+                
+                all_lis = driver.find_elements(By.TAG_NAME, "li")
+                print(f"📋 Found {len(all_lis)} total elements on page")
+                
+                for li in all_lis:
                     try:
-                        li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
-                    except:
-                        continue
-                    
-                    # 날짜 가져오기
-                    li_date = ""
-                    try:
-                        d_elems = li.find_elements(By.CLASS_NAME, "pui__m7nkds")
-                        for d in d_elems:
-                            if re.search(r'20\d{2}\.', d.text):
-                                li_date = d.text.strip()
-                                break
-                    except:
-                        continue
-                    
-                    # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
-                    # 요일 제거: "2025. 12. 10(수)" → "2025. 12. 10"
-                    import re
-                    date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
-                    li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
-                    
-                    # 🚀 3중 매칭: 작성자(부분) + 날짜 + 내용(부분)
-                    author_prefix = author[:min(3, len(author))]
-                    author_match = li_author.startswith(author_prefix)
-                    date_match = li_date_clean == date_clean
-                    
-                    # 내용 매칭 (있으면)
-                    content_match = True
-                    if content and len(content) > 10:
+                        # 작성자 가져오기 (한국어, *, 영어 모두 처리)
                         try:
-                            li_content = li.find_element(By.CLASS_NAME, "pui__vn15t2").text.strip()
-                            content_match = content[:50] in li_content[:100]
+                            li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
                         except:
-                            content_match = True  # 내용 없으면 패스
-                    
-                    if author_match and date_match and content_match:
-                        print(f"✅ Found review: author='{li_author}' (starts with '{author_prefix}'), date='{li_date_clean}', content matched={bool(content)}")
-                        target_review = li
-                        break
+                            continue
                         
-                except:
-                    continue
+                        # 날짜 가져오기
+                        li_date = ""
+                        try:
+                            d_elems = li.find_elements(By.CLASS_NAME, "pui__m7nkds")
+                            for d in d_elems:
+                                if re.search(r'20\d{2}\.', d.text):
+                                    li_date = d.text.strip()
+                                    break
+                        except:
+                            continue
+                        
+                        # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
+                        # 요일 제거: "2025. 12. 10(수)" → "2025. 12. 10"
+                        import re
+                        date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
+                        li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
+                        
+                        # 🚀 3중 매칭: 작성자(부분) + 날짜 + 내용(부분)
+                        author_prefix = author[:min(3, len(author))]
+                        author_match = li_author.startswith(author_prefix)
+                        date_match = li_date_clean == date_clean
+                        
+                        # 내용 매칭 (있으면)
+                        content_match = True
+                        if content and len(content) > 10:
+                            try:
+                                li_content = li.find_element(By.CLASS_NAME, "pui__vn15t2").text.strip()
+                                content_match = content[:50] in li_content[:100]
+                            except:
+                                content_match = True  # 내용 없으면 패스
+                        
+                        if author_match and date_match and content_match:
+                            print(f"✅ Found review (fallback): author='{li_author}' (starts with '{author_prefix}'), date='{li_date_clean}'")
+                            target_review = li
+                            break
+                            
+                    except:
+                        continue
             
             if not target_review:
                 # 요일 제거된 값으로 에러 메시지
