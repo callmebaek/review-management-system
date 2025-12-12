@@ -1129,17 +1129,21 @@ class NaverPlaceAutomationSelenium:
             time.sleep(2)
             print("✅ Reply form opened")
             
-            # Fill textarea (JavaScript)
+            # Fill textarea (실제 키 입력으로 React 이벤트 트리거)
             print("⌨️  Waiting for textarea...")
             textarea = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "textarea"))
             )
             
-            print(f"⌨️  Filling reply: {reply_text[:30]}...")
-            driver.execute_script("arguments[0].value = arguments[1];", textarea, reply_text)
-            driver.execute_script("arguments[0].focus();", textarea)
-            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
+            print(f"⌨️  Filling reply with send_keys: {reply_text[:30]}...")
+            textarea.clear()
+            time.sleep(0.5)
+            
+            # 🚀 CRITICAL: send_keys()로 실제 키 입력 (React 이벤트 트리거)
+            textarea.send_keys(reply_text)
             time.sleep(1)
+            
+            print("✅ Text input completed")
             
             # 🚀 target_review 내에서만 "등록" 찾기
             print("📤 Finding '등록' button in target review...")
