@@ -1124,13 +1124,14 @@ class NaverPlaceAutomationSelenium:
             driver.execute_script("arguments[0].click();", reply_btn)
             time.sleep(2)
             
-            # Fill textarea
+            # Fill textarea (JavaScript로 직접 입력 - click intercepted 방지)
             textarea = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "textarea"))
             )
-            textarea.click()
-            time.sleep(0.5)
-            textarea.send_keys(reply_text)
+            
+            # 🚀 JavaScript로 직접 값 설정 (클릭 불필요)
+            print("⌨️  Filling reply text with JavaScript...")
+            driver.execute_script("arguments[0].value = arguments[1];", textarea, reply_text)
             time.sleep(1)
             
             # Submit
