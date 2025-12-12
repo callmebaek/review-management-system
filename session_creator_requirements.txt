@@ -13,3 +13,4 @@ requests==2.31.0
 # EXE 변환 (개발용)
 pyinstaller==6.3.0
 
+

@@ -60,23 +60,15 @@ export default function Reviews() {
   // Get active user for cache key
   const activeNaverUser = localStorage.getItem('active_naver_user') || 'default'
   
-  // Fetch Naver reviews (User-specified load count)
+  // 🚀 Naver reviews - 비동기만 사용 (동기 API 비활성화)
   const { data: naverReviewsData, isLoading: naverLoading, error: naverError, refetch: refetchNaver } = useQuery({
-    queryKey: ['naver-reviews', placeId, naverPage, selectedLoadCount, activeNaverUser],  // Include user_id in cache key
+    queryKey: ['naver-reviews', placeId, naverPage, selectedLoadCount, activeNaverUser],
     queryFn: async () => {
-      const response = await apiClient.get(`/api/naver/reviews/${placeId}`, {
-        params: {
-          page: naverPage,
-          page_size: pageSize,
-          load_count: selectedLoadCount,
-          user_id: activeNaverUser
-        }
-      })
-      return response.data
+      // 비동기 모드에서는 실행 안 됨 (비활성화됨)
+      return []
     },
-    enabled: platform === 'naver' && !!placeId && hasSelectedCount, // Only fetch after user selected count
-    retry: false,
-    staleTime: 10 * 60 * 1000 // Cache for 10 minutes
+    enabled: false,  // 🚀 완전 비활성화 (비동기 API만 사용)
+    retry: false
   })
 
   // Fetch location info
