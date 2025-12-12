@@ -1168,16 +1168,23 @@ class NaverPlaceAutomationSelenium:
             driver.execute_script("arguments[0].click();", submit_btn)
             time.sleep(5)
             
-            # 검증
+            # 🚀 CRITICAL: 검증 - 실패 시 에러 발생
             print("🔍 Verifying reply...")
             time.sleep(2)
+            
+            reply_verified = False
             try:
                 reply_elem = target_review.find_element(By.CLASS_NAME, "pui__GbW8H7")
-                print(f"✅ Reply verified: {reply_elem.text[:30]}...")
+                reply_preview = reply_elem.text[:50]
+                print(f"✅ Reply verified: {reply_preview}...")
+                reply_verified = True
             except:
-                print("⚠️ Could not verify reply element")
+                print("❌ Could not verify reply element!")
             
-            print(f"✅ Reply posted successfully!")
+            if not reply_verified:
+                raise Exception("Reply verification failed - 답글이 실제로 게시되지 않았습니다")
+            
+            print(f"✅ Reply posted and verified successfully!")
             
             return {
                 'success': True,

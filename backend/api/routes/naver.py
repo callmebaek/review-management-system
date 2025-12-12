@@ -5,8 +5,12 @@ from config import settings
 from datetime import datetime, timedelta
 import json
 import threading
+import queue
 
 router = APIRouter()
+
+# 🚀 답글 게시 순차 처리를 위한 Lock
+_reply_lock = threading.Lock()
 
 # Choose service based on configuration
 if settings.use_mock_naver:
@@ -297,31 +301,40 @@ async def post_reply_async(
     
     # Start background thread
     def background_reply():
-        try:
-            task_manager.update_task_status(task_id, 'processing')
-            task_manager.update_progress(task_id, 0, '답글 게시 중...')
+        # 🚀 CRITICAL: Lock으로 순차 처리 (동시 실행 방지)
+        with _reply_lock:
+            print(f"🔒 Acquired lock for task {task_id}")
             
-            # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
-            from services.naver_automation_selenium import naver_automation_selenium
+            try:
+                task_manager.update_task_status(task_id, 'processing')
+                task_manager.update_progress(task_id, 0, '대기열에서 처리 중...')
+                
+                # 🚀 직접 selenium 함수 호출
+                from services.naver_automation_selenium import naver_automation_selenium
+                
+                task_manager.update_progress(task_id, 0, '답글 게시 중...')
+                
+                # 🚀 작성자 + 날짜 2중 매칭
+                result = naver_automation_selenium.post_reply_by_author_date(
+                    place_id=place_id,
+                    author=author,
+                    date=date,
+                    reply_text=reply_text,
+                    user_id=user_id
+                )
             
-            # 🚀 작성자 + 날짜 2중 매칭 (user_id도 함께 전달)
-            result = naver_automation_selenium.post_reply_by_author_date(
-                place_id=place_id,
-                author=author,
-                date=date,
-                reply_text=reply_text,
-                user_id=user_id  # user_id 직접 전달
-            )
+                task_manager.set_result(task_id, result)
+                task_manager.update_task_status(task_id, 'completed')
+                task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
+                
+            except Exception as e:
+                print(f"❌ Background reply task {task_id} failed: {e}")
+                import traceback
+                traceback.print_exc()
+                task_manager.set_error(task_id, str(e))
             
-            task_manager.set_result(task_id, result)
-            task_manager.update_task_status(task_id, 'completed')
-            task_manager.update_progress(task_id, 1, '✅ 답글 게시 완료!')
-            
-        except Exception as e:
-            print(f"❌ Background reply task {task_id} failed: {e}")
-            import traceback
-            traceback.print_exc()
-            task_manager.set_error(task_id, str(e))
+            finally:
+                print(f"🔓 Released lock for task {task_id}")
     
     thread = threading.Thread(target=background_reply, daemon=True)
     thread.start()
