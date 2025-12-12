@@ -21,7 +21,7 @@ export default function Dashboard() {
     const initializeActiveUser = async () => {
       // localStorage에 active user가 없으면 자동 설정
       if (!activeNaverUser || activeNaverUser === 'null') {
-        try:
+        try {
           console.log('🔄 No active user, fetching sessions...')
           
           // 🚀 현재 로그인한 Google 계정의 세션만 조회
