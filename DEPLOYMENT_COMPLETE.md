@@ -251,3 +251,4 @@ self.api_url = "https://review-management-system-5bc2651ced45.herokuapp.com"
 **감사합니다!** 🚀✨
 
 
+
