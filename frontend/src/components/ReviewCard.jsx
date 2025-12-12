@@ -154,10 +154,11 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
         // Get active user from localStorage (for multi-account support)
         const activeUser = localStorage.getItem('active_naver_user') || 'default'
         
-        // 비동기 답글 게시 시작 (index로 찾기 - 가장 확실)
+        // 비동기 답글 게시 시작 (작성자 + 날짜 2중 매칭)
         const response = await apiClient.post('/api/naver/reviews/reply-async', {
           place_id: placeId,
-          review_index: reviewIndex,  // 리뷰 순서로 찾기
+          author: review.author,  // 작성자 (한국어, *, 영어 모두 처리)
+          date: review.date,      // 날짜
           reply_text: currentReplyText,
           user_id: activeUser
         })
