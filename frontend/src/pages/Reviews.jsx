@@ -675,6 +675,13 @@ export default function Reviews() {
                 ))
             }
           </div>
+        ) : asyncTaskId ? (
+          /* 🚀 비동기 로딩 대기 중 (진행률 화면 표시 전) */
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">리뷰 로딩 준비 중...</h3>
+            <p className="text-sm text-gray-600">잠시만 기다려주세요</p>
+          </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
             {platform === 'naver' && filter === 'unreplied' && !isLoading ? (
