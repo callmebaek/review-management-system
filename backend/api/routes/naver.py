@@ -758,9 +758,13 @@ async def delete_session(
     google_email: Optional[str] = Header(None, alias="X-Google-Email")
 ):
     """
-    Delete session from MongoDB
+    Delete session connection for current Google user
     
     🔐 보안: google_email과 user_id의 연결 확인
+    📝 동작:
+      - google_emails 배열에서 현재 사용자의 이메일만 제거
+      - 배열이 비면 세션 전체 삭제
+      - 다른 사용자는 계속 세션 사용 가능
     """
     try:
         # 🔐 권한 검증
@@ -776,23 +780,54 @@ async def delete_session(
         if db is None:
             raise HTTPException(status_code=500, detail="Database connection failed")
         
-        result = db.naver_sessions.delete_one({"_id": user_id})
-        
-        if result.deleted_count > 0:
-            return {
-                "success": True,
-                "message": "Session deleted successfully"
-            }
-        else:
+        # 현재 세션 조회
+        session = db.naver_sessions.find_one({"_id": user_id})
+        if not session:
             return {
                 "success": False,
                 "message": "No session found to delete"
+            }
+        
+        google_emails = session.get("google_emails", [])
+        
+        # 🔐 현재 사용자의 이메일만 제거
+        if google_email in google_emails:
+            google_emails.remove(google_email)
+            print(f"🗑️ Removed {google_email} from session {user_id}")
+        
+        # 📝 배열이 비었으면 세션 전체 삭제, 아니면 업데이트
+        if len(google_emails) == 0:
+            # 마지막 사용자 → 세션 전체 삭제
+            result = db.naver_sessions.delete_one({"_id": user_id})
+            print(f"🗑️ Deleted entire session {user_id} (no users left)")
+            
+            return {
+                "success": True,
+                "message": "세션이 완전히 삭제되었습니다",
+                "action": "deleted",
+                "remaining_users": 0
+            }
+        else:
+            # 다른 사용자 있음 → google_emails만 업데이트
+            db.naver_sessions.update_one(
+                {"_id": user_id},
+                {"$set": {"google_emails": google_emails}}
+            )
+            print(f"✅ Updated session {user_id}, remaining users: {google_emails}")
+            
+            return {
+                "success": True,
+                "message": f"세션 연결이 해제되었습니다 (다른 사용자 {len(google_emails)}명은 계속 사용 가능)",
+                "action": "disconnected",
+                "remaining_users": len(google_emails)
             }
             
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Session delete error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Session delete failed: {str(e)}")
 
 

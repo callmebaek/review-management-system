@@ -103,20 +103,50 @@ export default function NaverLogin() {
   }
 
   const handleDeleteSession = async (user_id) => {
-    if (!confirm(`'${user_id}' 세션을 삭제하시겠습니까? 다시 로그인해야 합니다.`)) {
+    // 🔐 현재 로그인한 구글 계정 정보
+    const googleEmail = localStorage.getItem('google_email')
+    const googleName = localStorage.getItem('google_name') || googleEmail
+    
+    if (!confirm(
+      `'${user_id}' 세션에서 연결을 해제하시겠습니까?\n\n` +
+      `현재 계정: ${googleName}\n` +
+      `- 다른 사용자가 이 세션을 공유 중이면 본인만 연결 해제됩니다.\n` +
+      `- 본인만 사용 중이면 세션이 완전히 삭제됩니다.`
+    )) {
       return
     }
     
     try {
       setLoading(true)
-      await apiClient.delete(`/api/naver/session?user_id=${user_id}`)
+      const response = await apiClient.delete(`/api/naver/session?user_id=${user_id}`)
+      
+      // 🎯 백엔드 응답에 따라 다른 메시지 표시
+      if (response.data.action === 'deleted') {
+        // 세션 완전 삭제됨
+        alert(`✅ 세션이 완전히 삭제되었습니다.\n다시 사용하려면 EXE로 세션을 재생성하세요.`)
+      } else if (response.data.action === 'disconnected') {
+        // 본인만 연결 해제됨
+        alert(
+          `✅ 연결이 해제되었습니다.\n\n` +
+          `다른 사용자 ${response.data.remaining_users}명은 계속 이 세션을 사용할 수 있습니다.`
+        )
+      }
       
       // Reload sessions
       await loadSessions()
       
+      // 🔄 삭제한 세션이 활성 세션이었다면 초기화
+      if (activeSession === user_id) {
+        localStorage.removeItem('active_naver_user')
+        setActiveSession(null)
+      }
+      
       setError(null)
     } catch (err) {
-      setError('세션 삭제 중 오류가 발생했습니다')
+      console.error('세션 삭제 오류:', err)
+      const errorMsg = err.response?.data?.detail || '세션 삭제 중 오류가 발생했습니다'
+      setError(errorMsg)
+      alert(`❌ ${errorMsg}`)
     } finally {
       setLoading(false)
     }
