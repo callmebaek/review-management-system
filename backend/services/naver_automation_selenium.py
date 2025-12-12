@@ -812,21 +812,24 @@ class NaverPlaceAutomationSelenium:
                         print(f"  ✅ Reached target {TARGET_LOAD_COUNT}!")
                         break
                     
-                    # 🚀 Only exit early if we're stuck AND haven't reached target
-                    # Wait longer (10 attempts) to ensure we get all requested reviews
-                    if no_change >= 10:
+                    # 🚀 목표 개수까지 끝까지 시도 (20회 대기)
+                    if no_change >= 20:  # 10 → 20으로 증가
                         print(f"  ⚠️ No more content loading after {no_change} attempts (stopped at {current_count} reviews).")
                         print(f"  ⚠️ Requested: {TARGET_LOAD_COUNT}, Got: {current_count}")
                         break
                     
-                    # 🚀 FIX: Use scrollIntoView on the LAST element
+                    # 🚀 매우 공격적인 스크롤 (여러 번)
                     if lis:
+                        # 마지막 요소로 스크롤
                         driver.execute_script("arguments[0].scrollIntoView(true);", lis[-1])
+                        time.sleep(0.3)
+                        # 추가 스크롤 (lazy loading 트리거)
+                        driver.execute_script("window.scrollBy(0, 800);")
                     else:
-                        driver.execute_script("window.scrollBy(0, 1000);")
+                        driver.execute_script("window.scrollBy(0, 1200);")
                     
-                    # 🚀 IMPORTANT: Wait longer for lazy loading
-                    time.sleep(0.8)  # Increased for reliable loading
+                    # 🚀 CRITICAL: 네이버 lazy loading을 위해 충분히 대기
+                    time.sleep(1.5)  # 0.8 → 1.5초로 증가
                     
                 except Exception as e:
                     print(f"  ⚠️ Scroll error: {e}")

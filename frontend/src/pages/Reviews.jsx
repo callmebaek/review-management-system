@@ -132,7 +132,9 @@ export default function Reviews() {
   
   const totalReviews = platform === 'gbp'
     ? gbpReviewsData?.total_count
-    : naverReviewsData?.total || (Array.isArray(allReviewsData) ? allReviewsData.length : 0)
+    : (asyncProgress?.status === 'completed' && asyncProgress?.result?.total)
+      ? asyncProgress.result.total  // 비동기 완료 시 전체 개수
+      : naverReviewsData?.total || (Array.isArray(allReviewsData) ? allReviewsData.length : 0)
   
   // 🚀 Calculate filter counts for Naver
   const filterCounts = {
