@@ -14,9 +14,13 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
   // 🚀 비동기 답글 게시
   const [replyTaskId, setReplyTaskId] = useState(null)
   const [replyProgress, setReplyProgress] = useState(null)
+  
+  // 🎯 로컬 상태: 답글 게시 완료 여부 (낙관적 업데이트)
+  const [localHasReply, setLocalHasReply] = useState(false)
 
   const isNaver = platform === 'naver'
-  const hasReply = isNaver ? !!review.has_reply : !!review.review_reply
+  // 🎯 서버 데이터 또는 로컬 상태 확인
+  const hasReply = localHasReply || (isNaver ? !!review.has_reply : !!review.review_reply)
   
   // 🚀 답글 게시 작업 상태 폴링
   const { data: replyTaskStatus } = useQuery({
@@ -35,29 +39,21 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
       if (task.status === 'completed') {
         console.log('✅ Reply task completed!')
         
+        // 🎯 즉시 UI 업데이트 (낙관적 업데이트)
+        setLocalHasReply(true)
+        
         // 🚀 성공 알림 표시
-        alert('✅ 답글이 성공적으로 게시되었습니다!\n\n잠시 후 리뷰 목록을 새로고침합니다.')
+        alert('✅ 답글이 성공적으로 게시되었습니다!')
         
         setPosting(false)
         setReplyTaskId(null)
         setShowReplyForm(false)
         setReplyText('')
         
-        // 🚀 즉시 UI 업데이트 (optimistic) + 페이지 강제 새로고침
+        // 🚀 백그라운드에서 캐시 무효화 (UI는 이미 업데이트됨)
         if (isNaver && placeId) {
-          const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
-          const replyText = task.result?.reply_text || currentReplyText || '답글'
-          
-          console.log(`🔄 Updating review ${review.review_id} with reply: ${replyText.substring(0, 30)}...`)
-          
-          // 캐시 완전 무효화 및 즉시 새로고침
+          console.log(`🔄 Invalidating cache for place: ${placeId}`)
           queryClient.invalidateQueries(['naver-reviews'])
-          
-          // 1초 후 페이지 강제 새로고침 (확실하게)
-          setTimeout(() => {
-            console.log('🔄 Force reloading page to show reply...')
-            window.location.reload()
-          }, 1000)
         }
         
         if (onReplyPosted) {
@@ -201,6 +197,10 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
           reply_text: currentReplyText,
           location_name: locationName || review.name.split('/reviews/')[0]
         })
+        
+        // 🎯 GBP 답글 게시 성공 시 즉시 UI 업데이트
+        setLocalHasReply(true)
+        alert('✅ 답글이 성공적으로 게시되었습니다!')
       }
       
       // 🚀 SUCCESS: Now close form and update UI
@@ -209,22 +209,12 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
       
       // Update the review object in cache (optimistic)
       if (isNaver && placeId) {
-        // Get active user to match cache key
-        const activeUser = localStorage.getItem('active_naver_user') || 'default'
-        
         // Invalidate all related caches (simpler and more reliable)
         queryClient.invalidateQueries(['naver-reviews', placeId])
+      } else {
+        // GBP cache invalidation
+        queryClient.invalidateQueries(['gbp-reviews'])
       }
-      
-      // Show success alert
-      alert('✅ 답글이 성공적으로 게시되었습니다!')
-      
-      // Verify after 3 seconds (silent background check)
-      setTimeout(() => {
-        if (isNaver && placeId) {
-          queryClient.invalidateQueries(['naver-reviews', placeId])
-        }
-      }, 3000)
       
       if (onReplyPosted) {
         onReplyPosted()
@@ -313,7 +303,7 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
       )}
 
       {/* Reply Actions */}
-      {!hasReply && (
+      {!hasReply ? (
         <>
           {!showReplyForm ? (
             <button
@@ -413,6 +403,15 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
             </div>
           )}
         </>
+      ) : (
+        // 🎯 답글 게시 완료 상태 표시
+        <button
+          disabled
+          className="w-full py-2 px-4 border-2 rounded-md font-medium bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed flex items-center justify-center"
+        >
+          <MessageSquare className="w-4 h-4 mr-2" />
+          답글 완료
+        </button>
       )}
     </div>
   )
