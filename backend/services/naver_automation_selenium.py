@@ -1094,9 +1094,18 @@ class NaverPlaceAutomationSelenium:
                     except:
                         continue
                     
-                    # 🚀 작성자 + 날짜 정확히 일치하면 찾음
-                    if li_author == author and li_date == date:
-                        print(f"✅ Found review by author+date match: {author} ({date})")
+                    # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
+                    # 요일 제거: "2025. 12. 10(수)" → "2025. 12. 10"
+                    import re
+                    date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
+                    li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
+                    
+                    # 작성자 부분 일치 (앞 3자) + 날짜 정확히 일치
+                    author_prefix = author[:min(3, len(author))]  # 최소 3자
+                    
+                    if li_author.startswith(author_prefix) and li_date_clean == date_clean:
+                        print(f"✅ Found review: author starts with '{author_prefix}' (full: '{author}'), date='{date_clean}'")
+                        print(f"   Matched: author='{li_author}', date='{li_date}'")
                         target_review = li
                         break
                         
