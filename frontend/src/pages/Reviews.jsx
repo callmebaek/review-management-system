@@ -253,8 +253,8 @@ export default function Reviews() {
       // For Naver, wait longer for cloud environment (Heroku needs more time)
       console.log('✅ 답글이 등록되었습니다. 잠시 후 새로고침합니다.')
       
-      // Show success message immediately
-      alert('✅ 답글이 성공적으로 등록되었습니다!')
+      // 🚀 중복 alert 제거 (ReviewCard에서 이미 표시)
+      // alert('✅ 답글이 성공적으로 등록되었습니다!')
       
       // Wait 3 seconds then refetch to get updated data
       setTimeout(() => {

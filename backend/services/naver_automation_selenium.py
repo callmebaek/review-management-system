@@ -1118,13 +1118,16 @@ class NaverPlaceAutomationSelenium:
                 raise Exception(f"Could not find review: author='{author}', date='{date}'")
             
             # Scroll to review
+            print("📜 Scrolling to review...")
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)
             time.sleep(1)
             
-            # Click reply button
+            # 🚀 CRITICAL: "답글 쓰기" 버튼 클릭
+            print("🖱️  Clicking '답글 쓰기' button...")
             reply_btn = target_review.find_element(By.XPATH, ".//button[contains(., '답글')]")
             driver.execute_script("arguments[0].click();", reply_btn)
             time.sleep(2)
+            print("✅ Reply form opened")
             
             # Fill textarea (JavaScript)
             print("⌨️  Waiting for textarea...")
