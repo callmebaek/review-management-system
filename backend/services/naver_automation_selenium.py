@@ -1038,14 +1038,14 @@ class NaverPlaceAutomationSelenium:
                 finally:
                     driver = None
     
-    def post_reply_by_author(self, place_id: str, author: str, date: str, reply_text: str) -> Dict:
+    def post_reply_by_index(self, place_id: str, review_index: int, reply_text: str) -> Dict:
         """
-        작성자 이름으로 리뷰 찾아서 답글 게시 (더 안정적)
+        리뷰 순서(index)로 찾아서 답글 게시 (가장 확실한 방법)
         """
         driver = None
         try:
-            print(f"💬 Posting reply to review by: {author} ({date})")
-            logger.info(f"💬 Posting reply by author: {author}")
+            print(f"💬 Posting reply to review at index: {review_index}")
+            logger.info(f"💬 Posting reply at index: {review_index}")
             
             driver = self._create_driver(headless=True)
             
@@ -1064,23 +1064,27 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
-            # 🚀 작성자 이름으로 리뷰 찾기
-            print(f"🔍 Finding review by author: {author}")
+            # 🚀 순서로 리뷰 찾기 (가장 확실함)
+            print(f"🔍 Finding review at index: {review_index}")
             all_lis = driver.find_elements(By.TAG_NAME, "li")
             
-            target_review = None
+            # 유효한 리뷰만 필터링 (광고, 가이드 제외)
+            valid_reviews = []
             for li in all_lis:
                 try:
-                    li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
-                    if li_author == author:
-                        print(f"✅ Found review by author: {author}")
-                        target_review = li
-                        break
+                    author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                    if author and author != "익명" and "가이드" not in author:
+                        valid_reviews.append(li)
                 except:
                     continue
             
-            if not target_review:
-                raise Exception(f"Could not find review by author: {author}")
+            print(f"📋 Found {len(valid_reviews)} valid reviews")
+            
+            if review_index >= len(valid_reviews):
+                raise Exception(f"Review index {review_index} out of range (total: {len(valid_reviews)})")
+            
+            target_review = valid_reviews[review_index]
+            print(f"✅ Found review at index {review_index}")
             
             # Scroll and post
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_review)

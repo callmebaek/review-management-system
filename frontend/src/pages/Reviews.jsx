@@ -664,10 +664,11 @@ export default function Reviews() {
                     onReplyPosted={handleReplyPosted}
                   />
                 ))
-              : Array.isArray(reviewsData) && reviewsData.map((review) => (
+              : Array.isArray(reviewsData) && reviewsData.map((review, index) => (
                   <ReviewCard
                     key={review.review_id}
                     review={review}
+                    reviewIndex={index}  // 리뷰 순서 전달
                     platform="naver"
                     placeId={placeId}
                     onReplyPosted={handleReplyPosted}

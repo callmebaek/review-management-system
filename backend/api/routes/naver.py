@@ -272,14 +272,13 @@ async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, l
 @router.post("/reviews/reply-async")
 async def post_reply_async(
     place_id: str = Body(...),
-    review_id: str = Body(...),
+    review_index: int = Body(...),  # 리뷰 순서 (0부터 시작)
     reply_text: str = Body(...),
-    author: str = Body(...),  # 추가: 작성자 이름
-    date: str = Body(...),    # 추가: 날짜
     user_id: str = Body("default")
 ):
     """
     비동기로 답글 게시 (30초 타임아웃 우회)
+    리뷰 순서(index)로 찾아서 게시 - 가장 확실한 방법
     """
     from utils.task_manager import task_manager
     
@@ -289,10 +288,8 @@ async def post_reply_async(
         user_id=user_id,
         params={
             'place_id': place_id,
-            'review_id': review_id,
-            'reply_text': reply_text,
-            'author': author,  # 작성자로 리뷰 찾기
-            'date': date       # 날짜로 추가 확인
+            'review_index': review_index,
+            'reply_text': reply_text
         }
     )
     
@@ -308,11 +305,10 @@ async def post_reply_async(
             # Set active user
             naver_automation_selenium.set_active_user(user_id)
             
-            # 🚀 작성자 이름으로 찾기 (더 안정적)
-            result = naver_automation_selenium.post_reply_by_author(
+            # 🚀 순서(index)로 찾기 (가장 확실함)
+            result = naver_automation_selenium.post_reply_by_index(
                 place_id=place_id,
-                author=author,
-                date=date,
+                review_index=review_index,
                 reply_text=reply_text
             )
             

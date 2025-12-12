@@ -3,7 +3,7 @@ import { Star, User, Calendar, MessageSquare, Sparkles } from 'lucide-react'
 import apiClient from '../api/client'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 
-export default function ReviewCard({ review, platform = 'gbp', locationName, placeId, onReplyPosted }) {
+export default function ReviewCard({ review, reviewIndex, platform = 'gbp', locationName, placeId, onReplyPosted }) {
   const queryClient = useQueryClient()
   const [showReplyForm, setShowReplyForm] = useState(false)
   const [replyText, setReplyText] = useState('')
@@ -154,13 +154,11 @@ export default function ReviewCard({ review, platform = 'gbp', locationName, pla
         // Get active user from localStorage (for multi-account support)
         const activeUser = localStorage.getItem('active_naver_user') || 'default'
         
-        // 비동기 답글 게시 시작 (author와 date 전달)
+        // 비동기 답글 게시 시작 (index로 찾기 - 가장 확실)
         const response = await apiClient.post('/api/naver/reviews/reply-async', {
           place_id: placeId,
-          review_id: review.review_id,
+          review_index: reviewIndex,  // 리뷰 순서로 찾기
           reply_text: currentReplyText,
-          author: review.author,  // 작성자 이름으로 찾기
-          date: review.date,      // 날짜로 추가 확인
           user_id: activeUser
         })
         
