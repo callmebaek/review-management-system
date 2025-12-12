@@ -42,7 +42,12 @@ export default function NaverLogin() {
   const loadSessions = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get('/api/naver/sessions/list', { timeout: 5000 })
+      
+      // 🚀 현재 로그인한 Google 계정의 세션만 조회
+      const googleEmail = localStorage.getItem('google_email') || null
+      const params = googleEmail ? { google_email: googleEmail } : {}
+      
+      const response = await apiClient.get('/api/naver/sessions/list', { params, timeout: 5000 })
       setSessions(response.data.sessions || [])
       
       // 🚀 localStorage에서 현재 활성 계정 읽기 (우선순위 1)
