@@ -113,21 +113,28 @@ export default function Dashboard() {
     }
   }, [searchParams, queryClient, activeNaverUser])
 
-  // Check auth status (Mock 모드에서는 항상 통과)
+  // 🚀 실제 인증 확인 (Google OAuth)
   const { data: authStatus, isLoading: authLoading } = useQuery({
     queryKey: ['authStatus'],
     queryFn: async () => {
-      // Mock 모드: localStorage에 로그인 정보가 있으면 바로 통과
+      // Google 계정 확인
+      const googleEmail = localStorage.getItem('google_email')
       const isLoggedIn = localStorage.getItem('user_logged_in')
-      if (!isLoggedIn) {
+      
+      if (!googleEmail || !isLoggedIn) {
+        console.log('❌ Not logged in, redirecting...')
         navigate('/login')
         return { authenticated: false }
       }
       
-      // Mock 모드에서는 API 호출 없이 바로 진행
-      return { authenticated: true, mock: true }
+      console.log(`✅ Authenticated as: ${googleEmail}`)
+      return { 
+        authenticated: true,
+        email: googleEmail,
+        name: localStorage.getItem('google_name')
+      }
     },
-    retry: false  // Don't retry on failure
+    retry: false
   })
 
   // Fetch accounts

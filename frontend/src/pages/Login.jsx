@@ -10,10 +10,13 @@ export default function Login() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    // Check if already authenticated (Mock mode)
+    // 🚀 실제 인증 확인 (Google OAuth)
+    const googleEmail = localStorage.getItem('google_email')
     const isLoggedIn = localStorage.getItem('user_logged_in')
-    if (isLoggedIn === 'true') {
-      // Already logged in, redirect immediately
+    
+    if (googleEmail && isLoggedIn === 'true') {
+      // Google 로그인되어 있으면 Dashboard로
+      console.log(`✅ Already logged in as: ${googleEmail}`)
       navigate('/dashboard')
       return
     }
@@ -30,9 +33,12 @@ export default function Login() {
       setLoading(true)
       setError(null)
 
-      // Mock 모드: 바로 대시보드로 이동
-      localStorage.setItem('user_logged_in', 'true')
-      navigate('/dashboard')
+      // 🚀 실제 Google OAuth 사용
+      const response = await apiClient.get('/auth/google/login')
+      
+      // Google 로그인 페이지로 리디렉션
+      window.location.href = response.data.authorization_url
+      
     } catch (err) {
       setError(err.response?.data?.detail || '로그인에 실패했습니다')
       setLoading(false)
