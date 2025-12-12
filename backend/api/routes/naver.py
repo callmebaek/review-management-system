@@ -402,12 +402,13 @@ async def naver_logout():
 @router.post("/session/upload")
 async def upload_session(
     session_data: NaverSessionUpload,
-    google_email: str = Body(None)  # Google 계정 (선택)
+    google_email: str = None  # 쿼리 파라미터 (선택)
 ):
     """
     Upload Naver session from external tool (EXE)
     
     Google 계정과 연결하여 저장 (보안)
+    ?google_email=user@gmail.com
     """
     try:
         from utils.db import get_db
