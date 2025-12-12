@@ -10,16 +10,41 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', 'IBM Plex Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Heading 스타일 - weight 800-900 */
+h1, h2 {
+  font-weight: 800;
+}
+
+h1 {
+  font-weight: 900;
+}
+
+h3, h4, h5, h6 {
+  font-weight: 800;
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* 반응형 최적화 */
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+/* 커스텀 유틸리티 */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
 
 

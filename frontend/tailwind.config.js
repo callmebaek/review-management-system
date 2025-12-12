@@ -5,7 +5,17 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'IBM Plex Sans KR', 'system-ui', '-apple-system', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
+        'ibm-kr': ['IBM Plex Sans KR', 'sans-serif'],
+      },
+      fontWeight: {
+        'heading': '800',
+        'title': '900',
+      },
+    },
   },
   plugins: [],
 }
