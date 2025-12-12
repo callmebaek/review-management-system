@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Body, BackgroundTasks, Header, Depends
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from config import settings
@@ -110,13 +110,23 @@ async def naver_login_status():
 
 
 @router.get("/places")
-async def get_naver_places(user_id: str = "default"):
+async def get_naver_places(
+    user_id: str = "default",
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Get list of places in Smart Place Center
     
+    🔐 보안: google_email과 user_id의 연결 확인
+    
     Args:
         user_id: User ID for multi-account support (default: "default")
+        google_email: 현재 로그인한 구글 이메일 (헤더)
     """
+    # 🔐 권한 검증
+    from utils.auth_middleware import verify_naver_session_access
+    await verify_naver_session_access(user_id, google_email)
+    
     # Set active user before calling service
     naver_service.set_active_user(user_id)
     
@@ -131,14 +141,21 @@ async def get_naver_places(user_id: str = "default"):
 async def load_reviews_async(
     place_id: str = Body(...),
     load_count: int = Body(50),
-    user_id: str = Body("default")
+    user_id: str = Body("default"),
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
 ):
     """
     비동기로 리뷰 로드 (30초 타임아웃 우회)
     
+    🔐 보안: google_email과 user_id의 연결 확인
+    
     즉시 task_id를 반환하고 백그라운드에서 리뷰 로드
     프론트엔드는 /tasks/{task_id}로 진행 상황 폴링
     """
+    # 🔐 권한 검증
+    from utils.auth_middleware import verify_naver_session_access
+    await verify_naver_session_access(user_id, google_email)
+    
     from utils.task_manager import task_manager
     
     # Create task
@@ -252,9 +269,18 @@ async def get_task_status(task_id: str):
 
 
 @router.get("/reviews/{place_id}")
-async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, load_count: int = 300, user_id: str = "default"):
+async def get_naver_reviews(
+    place_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    load_count: int = 300,
+    user_id: str = "default",
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Get reviews for a specific place with pagination
+    
+    🔐 보안: google_email과 user_id의 연결 확인
     
     ⚠️ 주의: 100개 이상은 /reviews/load-async 사용 권장 (타임아웃 방지)
     
@@ -266,7 +292,12 @@ async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, l
         page_size: Number of reviews per page (default 20)
         load_count: Total number of reviews to load (50/150/300/500/1000)
         user_id: User ID for multi-account support (default: "default")
+        google_email: 현재 로그인한 구글 이메일 (헤더)
     """
+    # 🔐 권한 검증
+    from utils.auth_middleware import verify_naver_session_access
+    await verify_naver_session_access(user_id, google_email)
+    
     # Set active user before calling service
     naver_service.set_active_user(user_id)
     
@@ -281,12 +312,20 @@ async def post_reply_async(
     content: str = Body(""),
     reply_text: str = Body(...),
     user_id: str = Body("default"),
-    expected_review_count: int = Body(50)  # 목표 렌더링 개수
+    expected_review_count: int = Body(50),  # 목표 렌더링 개수
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
 ):
     """
     비동기로 답글 게시 (30초 타임아웃 우회)
+    
+    🔐 보안: google_email과 user_id의 연결 확인
+    
     작성자 + 날짜 + 내용 3중 매칭 - 가장 확실한 방법
     """
+    # 🔐 권한 검증
+    from utils.auth_middleware import verify_naver_session_access
+    await verify_naver_session_access(user_id, google_email)
+    
     from utils.task_manager import task_manager
     
     # Create task
@@ -353,16 +392,27 @@ async def post_reply_async(
 
 
 @router.post("/reviews/reply")
-async def post_naver_reply(request: NaverReplyRequest, user_id: str = "default"):
+async def post_naver_reply(
+    request: NaverReplyRequest,
+    user_id: str = "default",
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Post a reply to a Naver review (동기 방식 - 30초 제한)
+    
+    🔐 보안: google_email과 user_id의 연결 확인
     
     ⚠️ 주의: /reviews/reply-async 사용 권장 (타임아웃 방지)
     
     Args:
         request: Reply request with place_id, review_id, and reply_text
         user_id: User ID for multi-account support (default: "default")
+        google_email: 현재 로그인한 구글 이메일 (헤더)
     """
+    # 🔐 권한 검증
+    from utils.auth_middleware import verify_naver_session_access
+    await verify_naver_session_access(user_id, google_email)
+    
     # Set active user before calling service
     naver_service.set_active_user(user_id)
     
@@ -498,12 +548,17 @@ async def upload_session(
 
 
 @router.get("/sessions/list")
-async def list_sessions(google_email: str = None):
+async def list_sessions(
+    google_email: str = None,
+    x_google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Get Naver sessions for current Google user
     
-    google_email이 없으면 모든 세션 (호환성)
-    있으면 해당 사용자의 세션만
+    🔐 보안: 헤더의 google_email을 우선 사용 (파라미터는 호환성)
+    
+    google_email이 없으면 헤더에서 읽기
+    헤더에도 없으면 빈 배열 반환 (보안)
     """
     try:
         from utils.db import get_db
@@ -515,13 +570,17 @@ async def list_sessions(google_email: str = None):
         if db is None:
             return {"sessions": []}
         
+        # 🔐 헤더의 이메일을 우선 사용 (더 안전)
+        effective_email = x_google_email or google_email
+        
+        # 🔐 이메일이 없으면 빈 배열 반환 (보안 강화)
+        if not effective_email:
+            print("⚠️ No Google email provided, returning empty list")
+            return {"sessions": []}
+        
         # 🚀 Google 계정별 필터링 (배열에서 검색)
-        query = {}
-        if google_email:
-            query["google_emails"] = google_email  # 배열에 포함된 것 찾기
-            print(f"🔍 Fetching sessions for: {google_email}")
-        else:
-            print("⚠️ Fetching all sessions (no filter)")
+        query = {"google_emails": effective_email}  # 배열에 포함된 것 찾기
+        print(f"🔍 Fetching sessions for: {effective_email}")
         
         # Get sessions
         sessions = list(db.naver_sessions.find(query, {
@@ -631,13 +690,22 @@ async def get_session_status(user_id: str = "default"):
 
 
 @router.post("/session/switch")
-async def switch_session(user_id: str):
+async def switch_session(
+    user_id: str,
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Switch to a different Naver account session
+    
+    🔐 보안: google_email과 user_id의 연결 확인
     
     This sets the active session that will be used for API calls
     """
     try:
+        # 🔐 권한 검증
+        from utils.auth_middleware import verify_naver_session_access
+        await verify_naver_session_access(user_id, google_email)
+        
         from utils.db import get_db
         
         if not settings.use_mongodb or not settings.mongodb_url:
@@ -647,7 +715,7 @@ async def switch_session(user_id: str):
         if db is None:
             raise HTTPException(status_code=500, detail="Database connection failed")
         
-        # Check if session exists
+        # Check if session exists (이미 verify_naver_session_access에서 확인하지만 재확인)
         session = db.naver_sessions.find_one({"_id": user_id})
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -661,17 +729,28 @@ async def switch_session(user_id: str):
             "message": f"Switched to account: {session.get('username')}"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Session switch error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Session switch failed: {str(e)}")
 
 
 @router.delete("/session")
-async def delete_session(user_id: str = "default"):
+async def delete_session(
+    user_id: str = "default",
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
     """
     Delete session from MongoDB
+    
+    🔐 보안: google_email과 user_id의 연결 확인
     """
     try:
+        # 🔐 권한 검증
+        from utils.auth_middleware import verify_naver_session_access
+        await verify_naver_session_access(user_id, google_email)
+        
         from utils.db import get_db
         
         if not settings.use_mongodb or not settings.mongodb_url:
@@ -694,6 +773,8 @@ async def delete_session(user_id: str = "default"):
                 "message": "No session found to delete"
             }
             
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Session delete error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Session delete failed: {str(e)}")

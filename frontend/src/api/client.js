@@ -19,6 +19,13 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // 🔐 Add Google email to headers (for Naver session access control)
+    const googleEmail = localStorage.getItem('google_email')
+    if (googleEmail) {
+      config.headers['X-Google-Email'] = googleEmail
+    }
+    
     return config
   },
   (error) => {
