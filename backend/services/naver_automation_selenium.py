@@ -1053,7 +1053,7 @@ class NaverPlaceAutomationSelenium:
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
             print(f"🔗 Opening: {reviews_url}")
             driver.get(reviews_url)
-            time.sleep(2)
+            time.sleep(3)  # 2 → 3초로 증가
             
             # Handle popup
             try:
@@ -1064,7 +1064,36 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
-            # 🚀 순서로 리뷰 찾기 (가장 확실함)
+            # 🚀 CRITICAL: 리뷰가 로드될 때까지 대기
+            print("⏳ Waiting for reviews to load...")
+            max_wait = 10
+            reviews_loaded = False
+            
+            for wait_attempt in range(max_wait):
+                try:
+                    test_lis = driver.find_elements(By.TAG_NAME, "li")
+                    # 리뷰 요소가 있는지 확인
+                    for li in test_lis:
+                        try:
+                            li.find_element(By.CLASS_NAME, "pui__JiVbY3")  # 작성자 요소 확인
+                            reviews_loaded = True
+                            print(f"✅ Reviews loaded after {wait_attempt + 1} seconds")
+                            break
+                        except:
+                            continue
+                    
+                    if reviews_loaded:
+                        break
+                    
+                    print(f"⏳ Waiting... ({wait_attempt + 1}/{max_wait})")
+                    time.sleep(1)
+                except:
+                    time.sleep(1)
+            
+            if not reviews_loaded:
+                print("⚠️ Reviews might not be fully loaded, continuing anyway...")
+            
+            # 🚀 순서로 리뷰 찾기
             print(f"🔍 Finding review at index: {review_index}")
             all_lis = driver.find_elements(By.TAG_NAME, "li")
             
