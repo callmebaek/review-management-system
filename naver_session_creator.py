@@ -63,8 +63,8 @@ class NaverSessionCreator:
         
         # 설명
         info_text = (
-            "네이버 스마트플레이스 계정 정보를 입력하세요.\n"
-            "자동으로 로그인 후 세션이 생성됩니다."
+            "Google 계정과 연결하여 네이버 세션을 생성합니다.\n"
+            "자동으로 로그인 후 세션이 저장됩니다."
         )
         tk.Label(
             main_frame,
@@ -73,6 +73,30 @@ class NaverSessionCreator:
             fg="#666",
             justify=tk.LEFT
         ).pack(pady=(0, 20))
+        
+        # 🚀 Google Email 입력
+        tk.Label(
+            main_frame,
+            text="Google Email (필수)",
+            font=("맑은 고딕", 10, "bold")
+        ).pack(anchor=tk.W)
+        
+        google_email_frame = tk.Frame(main_frame)
+        google_email_frame.pack(anchor=tk.W, pady=(5, 5))
+        
+        self.google_email_entry = tk.Entry(
+            google_email_frame,
+            font=("맑은 고딕", 11),
+            width=40
+        )
+        self.google_email_entry.pack(side=tk.LEFT)
+        
+        tk.Label(
+            main_frame,
+            text="💡 이 Google 계정에 세션이 연결됩니다",
+            font=("맑은 고딕", 8),
+            fg="#999"
+        ).pack(anchor=tk.W, pady=(0, 15))
         
         # 네이버 아이디 입력
         tk.Label(
@@ -138,7 +162,18 @@ class NaverSessionCreator:
             mode='determinate',
             length=400
         )
-        self.progress_bar.pack(pady=(0, 20))
+        self.progress_bar.pack(pady=(0, 15))
+        
+        # 🚀 다른 계정 추가 옵션
+        self.add_another_var = tk.BooleanVar(value=False)
+        add_another_check = tk.Checkbutton(
+            main_frame,
+            text="✅ 완료 후 다른 네이버 계정 추가 (같은 Google 계정에)",
+            variable=self.add_another_var,
+            font=("맑은 고딕", 9),
+            fg="#4F46E5"
+        )
+        add_another_check.pack(pady=(0, 15))
         
         # 버튼 프레임
         button_frame = tk.Frame(main_frame)
@@ -184,11 +219,21 @@ class NaverSessionCreator:
     
     def start_process(self):
         """로그인 프로세스 시작"""
+        google_email = self.google_email_entry.get().strip()
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
         
+        # 🚀 Google Email 검증
+        if not google_email:
+            messagebox.showerror("오류", "Google Email을 입력해주세요.")
+            return
+        
+        if "@" not in google_email or "." not in google_email:
+            messagebox.showerror("오류", "올바른 이메일 형식을 입력해주세요.\n예: user@gmail.com")
+            return
+        
         if not username or not password:
-            messagebox.showerror("오류", "아이디와 비밀번호를 모두 입력해주세요.")
+            messagebox.showerror("오류", "네이버 아이디와 비밀번호를 모두 입력해주세요.")
             return
         
         if self.is_processing:
@@ -198,20 +243,21 @@ class NaverSessionCreator:
         self.is_processing = True
         self.start_button.config(state=tk.DISABLED)
         
-        # 네이버 아이디를 계정 ID로 사용 (자동)
+        # 네이버 아이디를 계정 ID로 사용
         account_id = username
         
         # 별도 스레드에서 실행
         thread = threading.Thread(
             target=self.login_and_upload,
-            args=(account_id, username, password)
+            args=(account_id, username, password, google_email)  # google_email 추가
         )
         thread.daemon = True
         thread.start()
     
-    def login_and_upload(self, account_id, username, password):
+    def login_and_upload(self, account_id, username, password, google_email):
         """네이버 로그인 및 세션 업로드"""
         try:
+            print(f"🔗 Connecting session to Google account: {google_email}")
             # 0. Heroku 서버 깨우기 (Cold Start 방지)
             self.update_progress("🔌 서버 연결 확인 중...", 5)
             try:
@@ -332,8 +378,11 @@ class NaverSessionCreator:
                             self.update_progress(f"🔄 재시도 중... ({attempt + 1}/{max_retries})", 95)
                             time.sleep(2)  # Wait before retry
                         
+                        # 🚀 Google email을 쿼리 파라미터로 전달
+                        upload_url = f"{self.api_url}/api/naver/session/upload?google_email={google_email}"
+                        
                         response = requests.post(
-                            f"{self.api_url}/api/naver/session/upload",
+                            upload_url,
                             json={
                                 "cookies": cookies,
                                 "user_id": account_id,
@@ -358,8 +407,11 @@ class NaverSessionCreator:
                 if upload_success:
                     self.update_progress("🎉 완료!", 100)
                     
+                    # 🚀 다른 계정 추가 옵션 확인
+                    add_another = self.add_another_var.get()
+                    
                     # 성공 다이얼로그
-                    self.window.after(0, lambda: self.show_success(len(cookies)))
+                    self.window.after(0, lambda: self.show_success(len(cookies), add_another, google_email))
                 else:
                     raise Exception(f"서버 업로드 실패 ({max_retries}회 시도): {last_error}")
             else:
@@ -381,11 +433,11 @@ class NaverSessionCreator:
             self.is_processing = False
             self.window.after(0, lambda: self.start_button.config(state=tk.NORMAL))
     
-    def show_success(self, cookie_count):
+    def show_success(self, cookie_count, add_another=False, google_email=""):
         """성공 메시지 표시"""
         success_window = tk.Toplevel(self.window)
         success_window.title("완료")
-        success_window.geometry("400x300")
+        success_window.geometry("400x350")  # 높이 증가
         success_window.resizable(False, False)
         
         # 성공 아이콘
@@ -433,6 +485,19 @@ class NaverSessionCreator:
             command=lambda: self.open_web_app(success_window)
         ).pack(side=tk.LEFT, padx=5)
         
+        # 🚀 다른 계정 추가 버튼 (옵션 선택 시)
+        if add_another:
+            tk.Button(
+                button_frame,
+                text="➕ 다른 계정 추가",
+                font=("맑은 고딕", 11, "bold"),
+                bg="#10B981",
+                fg="white",
+                width=15,
+                height=2,
+                command=lambda: self.add_another_account(success_window, google_email)
+            ).pack(side=tk.LEFT, padx=5)
+        
         tk.Button(
             button_frame,
             text="✅ 닫기",
@@ -465,6 +530,24 @@ class NaverSessionCreator:
                 self.update_progress("", 0)
         else:
             self.window.quit()
+    
+    def add_another_account(self, success_window, google_email):
+        """다른 네이버 계정 추가"""
+        success_window.destroy()
+        
+        # Google Email 자동 입력
+        self.google_email_entry.delete(0, tk.END)
+        self.google_email_entry.insert(0, google_email)
+        
+        # 네이버 정보 초기화
+        self.username_entry.delete(0, tk.END)
+        self.password_entry.delete(0, tk.END)
+        self.update_progress("대기 중...", 0)
+        
+        messagebox.showinfo(
+            "다른 계정 추가",
+            f"Google: {google_email}\n\n다른 네이버 계정을 입력하세요."
+        )
     
     def run(self):
         """앱 실행"""
