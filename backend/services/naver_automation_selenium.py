@@ -1038,13 +1038,13 @@ class NaverPlaceAutomationSelenium:
                 finally:
                     driver = None
     
-    def post_reply_by_author_date(self, place_id: str, author: str, date: str, reply_text: str, user_id: str = None) -> Dict:
+    def post_reply_by_composite(self, place_id: str, author: str, date: str, content: str, reply_text: str, user_id: str = None) -> Dict:
         """
-        작성자 + 날짜 2중 매칭으로 답글 게시 (가장 확실한 방법)
+        작성자 + 날짜 + 내용 3중 매칭으로 답글 게시 (가장 확실한 방법)
         한국어, *, 영어 등 모든 문자 처리
         user_id를 파라미터로 받아서 thread-safe하게 처리
         """
-        import re  # 🚀 함수 시작 부분에 import
+        import re  # 함수 시작 부분에 import
         
         driver = None
         try:
@@ -1072,9 +1072,23 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
+            # 🚀 CRITICAL: 많은 리뷰 렌더링되도록 충분히 스크롤
+            print("📜 Scrolling to load more reviews...")
+            
+            # 10번 스크롤 (약 50-100개 리뷰 렌더링)
+            for scroll_attempt in range(10):
+                driver.execute_script("window.scrollBy(0, 1500);")
+                time.sleep(0.5)
+            
+            # 맨 위로 다시 스크롤
+            driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(1)
+            print("✅ Scrolled and loaded more reviews")
+            
             # 🚀 작성자 + 날짜로 찾기 (2중 매칭)
             print(f"🔍 Finding review by author: '{author}' and date: '{date}'")
             all_lis = driver.find_elements(By.TAG_NAME, "li")
+            print(f"📋 Found {len(all_lis)} total elements on page")
             
             target_review = None
             for li in all_lis:
@@ -1102,12 +1116,22 @@ class NaverPlaceAutomationSelenium:
                     date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
                     li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
                     
-                    # 작성자 부분 일치 (앞 3자) + 날짜 정확히 일치
-                    author_prefix = author[:min(3, len(author))]  # 최소 3자
+                    # 🚀 3중 매칭: 작성자(부분) + 날짜 + 내용(부분)
+                    author_prefix = author[:min(3, len(author))]
+                    author_match = li_author.startswith(author_prefix)
+                    date_match = li_date_clean == date_clean
                     
-                    if li_author.startswith(author_prefix) and li_date_clean == date_clean:
-                        print(f"✅ Found review: author starts with '{author_prefix}' (full: '{author}'), date='{date_clean}'")
-                        print(f"   Matched: author='{li_author}', date='{li_date}'")
+                    # 내용 매칭 (있으면)
+                    content_match = True
+                    if content and len(content) > 10:
+                        try:
+                            li_content = li.find_element(By.CLASS_NAME, "pui__vn15t2").text.strip()
+                            content_match = content[:50] in li_content[:100]
+                        except:
+                            content_match = True  # 내용 없으면 패스
+                    
+                    if author_match and date_match and content_match:
+                        print(f"✅ Found review: author='{li_author}' (starts with '{author_prefix}'), date='{li_date_clean}', content matched={bool(content)}")
                         target_review = li
                         break
                         

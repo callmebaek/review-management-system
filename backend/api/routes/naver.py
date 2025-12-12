@@ -278,12 +278,13 @@ async def post_reply_async(
     place_id: str = Body(...),
     author: str = Body(...),      # 작성자
     date: str = Body(...),        # 날짜
+    content: str = Body(""),      # 내용 (추가)
     reply_text: str = Body(...),
     user_id: str = Body("default")
 ):
     """
     비동기로 답글 게시 (30초 타임아웃 우회)
-    작성자 + 날짜 2중 매칭 - 가장 확실한 방법
+    작성자 + 날짜 + 내용 3중 매칭 - 가장 확실한 방법
     """
     from utils.task_manager import task_manager
     
@@ -295,6 +296,7 @@ async def post_reply_async(
             'place_id': place_id,
             'author': author,
             'date': date,
+            'content': content[:100] if content else "",  # 내용 첫 100자
             'reply_text': reply_text
         }
     )
@@ -314,14 +316,15 @@ async def post_reply_async(
                 
                 task_manager.update_progress(task_id, 0, '답글 게시 중...')
                 
-                # 🚀 작성자 + 날짜 2중 매칭
-                result = naver_automation_selenium.post_reply_by_author_date(
-                    place_id=place_id,
-                    author=author,
-                    date=date,
-                    reply_text=reply_text,
-                    user_id=user_id
-                )
+            # 🚀 작성자 + 날짜 + 내용 3중 매칭
+            result = naver_automation_selenium.post_reply_by_composite(
+                place_id=place_id,
+                author=author,
+                date=date,
+                content=content,
+                reply_text=reply_text,
+                user_id=user_id
+            )
             
                 task_manager.set_result(task_id, result)
                 task_manager.update_task_status(task_id, 'completed')
