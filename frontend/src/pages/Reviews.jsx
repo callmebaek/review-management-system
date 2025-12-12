@@ -357,12 +357,24 @@ export default function Reviews() {
             </div>
             
             <button
-              onClick={() => {
+              onClick={async () => {
+                console.log('🔵 Button clicked!')
+                console.log(`📦 Selected count: ${selectedLoadCount}`)
+                console.log(`🏪 Place ID: ${placeId}`)
+                
                 setHasSelectedCount(true)
                 setShowLoadCountModal(false)
                 
                 // 🚀 모든 로딩을 비동기로 (타임아웃 방지)
-                startAsyncLoading()
+                console.log('🚀 Starting async loading...')
+                
+                try {
+                  await startAsyncLoading()
+                  console.log('✅ Async loading function completed')
+                } catch (err) {
+                  console.error('❌ Async loading error:', err)
+                  alert('비동기 로딩 시작 실패: ' + err.message)
+                }
               }}
               className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
             >

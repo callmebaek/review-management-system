@@ -86,9 +86,21 @@ async def google_callback(request: Request):
         
         credentials = flow.credentials
         
-        # Save credentials with user ID (for now, use 'default')
-        # In production, you'd want to associate this with actual user accounts
-        user_id = "default"
+        # 🚀 Get Google user info (email)
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
+        try:
+            # Get user info from Google
+            service = build('oauth2', 'v2', credentials=credentials)
+            user_info = service.userinfo().get().execute()
+            user_email = user_info.get('email', 'unknown')
+            print(f"✅ Google user logged in: {user_email}")
+        except:
+            user_email = "default"
+        
+        # Save credentials with email as user ID
+        user_id = user_email
         token_manager.save_token(user_id, credentials)
         
         # Redirect to frontend success page
@@ -100,6 +112,19 @@ async def google_callback(request: Request):
         # Redirect to frontend with error
         frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
         return RedirectResponse(url=f"{frontend_url}/login?error={str(e)}")
+
+
+@router.get("/me")
+async def get_current_user():
+    """
+    현재 로그인한 Google 사용자 정보 가져오기
+    """
+    # TODO: 실제 구현 (현재는 Mock)
+    # 실제로는 세션이나 JWT에서 사용자 정보 가져오기
+    return {
+        "email": "user@example.com",  # Mock
+        "authenticated": True
+    }
 
 
 @router.get("/status")
