@@ -1038,20 +1038,19 @@ class NaverPlaceAutomationSelenium:
                 finally:
                     driver = None
     
-    def post_reply_by_composite(self, place_id: str, author: str, date: str, content: str, reply_text: str, user_id: str = None) -> Dict:
+    def post_reply_by_composite(self, place_id: str, author: str, date: str, content: str, reply_text: str, user_id: str = None, expected_count: int = 50) -> Dict:
         """
         작성자 + 날짜 + 내용 3중 매칭으로 답글 게시 (가장 확실한 방법)
-        한국어, *, 영어 등 모든 문자 처리
-        user_id를 파라미터로 받아서 thread-safe하게 처리
+        expected_count만큼 리뷰를 렌더링하여 찾기
         """
-        import re  # 함수 시작 부분에 import
+        import re
         
         driver = None
         try:
             print(f"💬 Posting reply to: {author} ({date}) for user: {user_id}")
-            logger.info(f"💬 Posting reply by author+date match")
+            print(f"🎯 Target: {expected_count} reviews to render")
             
-            # 🚀 user_id 설정 (thread-safe)
+            # 🚀 user_id 설정
             if user_id:
                 self.set_active_user(user_id)
             
@@ -1072,18 +1071,34 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
-            # 🚀 CRITICAL: 많은 리뷰 렌더링되도록 충분히 스크롤
-            print("📜 Scrolling to load more reviews...")
+            # 🚀 목표 개수만큼 렌더링될 때까지 스크롤
+            print(f"📜 Scrolling to render at least {expected_count} reviews...")
             
-            # 10번 스크롤 (약 50-100개 리뷰 렌더링)
-            for scroll_attempt in range(10):
+            scroll_count = 0
+            max_scrolls = 20
+            
+            while scroll_count < max_scrolls:
+                # 현재 리뷰 요소 개수
+                current_lis = driver.find_elements(By.TAG_NAME, "li")
+                valid_count = sum(1 for li in current_lis
+                    if any(li.find_elements(By.CLASS_NAME, "pui__JiVbY3")))
+                
+                print(f"  📜 Scroll {scroll_count + 1}: {len(current_lis)} elements ({valid_count} valid reviews)")
+                
+                # 목표 개수 도달하면 중단
+                if valid_count >= expected_count:
+                    print(f"  ✅ Reached target: {valid_count} >= {expected_count}")
+                    break
+                
+                # 스크롤
                 driver.execute_script("window.scrollBy(0, 1500);")
-                time.sleep(0.5)
+                time.sleep(1)
+                scroll_count += 1
             
-            # 맨 위로 다시 스크롤
+            # 맨 위로 스크롤
             driver.execute_script("window.scrollTo(0, 0);")
             time.sleep(1)
-            print("✅ Scrolled and loaded more reviews")
+            print(f"✅ Rendered {valid_count} reviews (target: {expected_count})")
             
             # 🚀 작성자 + 날짜로 찾기 (2중 매칭)
             print(f"🔍 Finding review by author: '{author}' and date: '{date}'")

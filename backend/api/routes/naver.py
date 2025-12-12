@@ -276,11 +276,12 @@ async def get_naver_reviews(place_id: str, page: int = 1, page_size: int = 20, l
 @router.post("/reviews/reply-async")
 async def post_reply_async(
     place_id: str = Body(...),
-    author: str = Body(...),      # 작성자
-    date: str = Body(...),        # 날짜
-    content: str = Body(""),      # 내용 (추가)
+    author: str = Body(...),
+    date: str = Body(...),
+    content: str = Body(""),
     reply_text: str = Body(...),
-    user_id: str = Body("default")
+    user_id: str = Body("default"),
+    expected_review_count: int = Body(50)  # 목표 렌더링 개수
 ):
     """
     비동기로 답글 게시 (30초 타임아웃 우회)
@@ -296,8 +297,9 @@ async def post_reply_async(
             'place_id': place_id,
             'author': author,
             'date': date,
-            'content': content[:100] if content else "",  # 내용 첫 100자
-            'reply_text': reply_text
+            'content': content[:100] if content else "",
+            'reply_text': reply_text,
+            'expected_count': expected_review_count  # 목표 개수
         }
     )
     
@@ -323,7 +325,8 @@ async def post_reply_async(
                     date=date,
                     content=content,
                     reply_text=reply_text,
-                    user_id=user_id
+                    user_id=user_id,
+                    expected_count=expected_review_count  # 목표 개수 전달
                 )
                 
                 task_manager.set_result(task_id, result)

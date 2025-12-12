@@ -180,13 +180,17 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
         // 비동기 답글 게시 시작 (작성자 + 날짜 + 내용 3중 매칭)
         const reviewContent = review.content || ""
         
+        // 🚀 현재 로드된 리뷰 개수 전달 (백엔드에서 같은 개수 렌더링)
+        const expectedCount = document.querySelectorAll('[data-review-card]')?.length || 50
+        
         const response = await apiClient.post('/api/naver/reviews/reply-async', {
           place_id: placeId,
-          author: review.author,  // 작성자
-          date: review.date,      // 날짜
-          content: reviewContent, // 내용 (3중 매칭)
+          author: review.author,
+          date: review.date,
+          content: reviewContent,
           reply_text: currentReplyText,
-          user_id: activeUser
+          user_id: activeUser,
+          expected_review_count: expectedCount  // 목표 렌더링 개수
         })
         
         // 작업 ID 저장하고 폴링 시작
