@@ -304,15 +304,13 @@ async def post_reply_async(
             # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
             from services.naver_automation_selenium import naver_automation_selenium
             
-            # Set active user
-            naver_automation_selenium.set_active_user(user_id)
-            
-            # 🚀 작성자 + 날짜 2중 매칭
+            # 🚀 작성자 + 날짜 2중 매칭 (user_id도 함께 전달)
             result = naver_automation_selenium.post_reply_by_author_date(
                 place_id=place_id,
                 author=author,
                 date=date,
-                reply_text=reply_text
+                reply_text=reply_text,
+                user_id=user_id  # user_id 직접 전달
             )
             
             task_manager.set_result(task_id, result)

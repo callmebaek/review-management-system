@@ -1038,15 +1038,20 @@ class NaverPlaceAutomationSelenium:
                 finally:
                     driver = None
     
-    def post_reply_by_author_date(self, place_id: str, author: str, date: str, reply_text: str) -> Dict:
+    def post_reply_by_author_date(self, place_id: str, author: str, date: str, reply_text: str, user_id: str = None) -> Dict:
         """
         작성자 + 날짜 2중 매칭으로 답글 게시 (가장 확실한 방법)
         한국어, *, 영어 등 모든 문자 처리
+        user_id를 파라미터로 받아서 thread-safe하게 처리
         """
         driver = None
         try:
-            print(f"💬 Posting reply to: {author} ({date})")
+            print(f"💬 Posting reply to: {author} ({date}) for user: {user_id}")
             logger.info(f"💬 Posting reply by author+date match")
+            
+            # 🚀 user_id 설정 (thread-safe)
+            if user_id:
+                self.set_active_user(user_id)
             
             driver = self._create_driver(headless=True)
             

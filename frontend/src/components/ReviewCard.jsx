@@ -34,14 +34,39 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
       // 🚀 KEEP posting true until completed or failed
       if (task.status === 'completed') {
         console.log('✅ Reply task completed!')
+        
+        // 🚀 성공 알림 표시
+        alert('✅ 답글이 성공적으로 게시되었습니다!\n\n잠시 후 리뷰 목록을 새로고침합니다.')
+        
         setPosting(false)
         setReplyTaskId(null)
         setShowReplyForm(false)
         setReplyText('')
         
-        // 캐시 무효화
+        // 🚀 즉시 UI 업데이트 (optimistic)
         if (isNaver && placeId) {
-          queryClient.invalidateQueries(['naver-reviews', placeId])
+          const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
+          
+          // 캐시에서 해당 리뷰 찾아서 업데이트
+          queryClient.setQueryData(['naver-reviews', placeId], (oldData) => {
+            if (!oldData) return oldData
+            
+            const reviews = oldData.reviews || oldData
+            if (Array.isArray(reviews)) {
+              const updatedReviews = reviews.map(r => 
+                r.review_id === review.review_id
+                  ? { ...r, has_reply: true, reply: task.result?.reply_text || '답글', reply_date: currentDate }
+                  : r
+              )
+              return oldData.reviews ? { ...oldData, reviews: updatedReviews } : updatedReviews
+            }
+            return oldData
+          })
+          
+          // 3초 후 서버에서 다시 가져오기 (검증)
+          setTimeout(() => {
+            queryClient.invalidateQueries(['naver-reviews', placeId])
+          }, 3000)
         }
         
         if (onReplyPosted) {
@@ -139,6 +164,13 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
   const handlePostReply = async () => {
     if (!replyText.trim()) {
       setError('답글 내용을 입력해주세요')
+      return
+    }
+    
+    // 🚀 이미 게시 중이면 중복 방지
+    if (posting || replyTaskId) {
+      console.warn('⚠️ Already posting reply, please wait...')
+      alert('이미 답글을 게시하고 있습니다. 잠시만 기다려주세요.')
       return
     }
 
