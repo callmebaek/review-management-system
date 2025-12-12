@@ -22,8 +22,8 @@ class NaverSessionCreator:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("네이버 세션 생성기 v1.0")
-        self.window.geometry("500x750")  # 700 → 750으로 증가
-        self.window.resizable(True, True)  # 크기 조절 가능하게
+        self.window.geometry("520x650")  # 버튼이 보이도록
+        self.window.resizable(True, True)
         
         # API 설정
         self.api_url = "https://review-management-system-5bc2651ced45.herokuapp.com"
@@ -58,7 +58,7 @@ class NaverSessionCreator:
         ).pack()
         
         # 메인 컨텐츠
-        main_frame = tk.Frame(self.window, padx=30, pady=20)
+        main_frame = tk.Frame(self.window, padx=25, pady=15)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 설명
@@ -72,9 +72,9 @@ class NaverSessionCreator:
             font=("맑은 고딕", 10),
             fg="#666",
             justify=tk.LEFT
-        ).pack(pady=(0, 20))
+        ).pack(pady=(0, 10))
         
-        # 🚀 Google Email 입력
+        # 🚀 Google Email 입력 (여러 개 가능)
         tk.Label(
             main_frame,
             text="Google Email (필수)",
@@ -82,21 +82,24 @@ class NaverSessionCreator:
         ).pack(anchor=tk.W)
         
         google_email_frame = tk.Frame(main_frame)
-        google_email_frame.pack(anchor=tk.W, pady=(5, 5))
+        google_email_frame.pack(anchor=tk.W, pady=(5, 5), fill=tk.X)
         
-        self.google_email_entry = tk.Entry(
+        # 여러 줄 입력 가능한 Text 위젯
+        self.google_email_text = tk.Text(
             google_email_frame,
-            font=("맑은 고딕", 11),
-            width=40
+            font=("맑은 고딕", 9),
+            width=42,
+            height=2,  # 2줄로 축소
+            wrap=tk.WORD
         )
-        self.google_email_entry.pack(side=tk.LEFT)
+        self.google_email_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         tk.Label(
             main_frame,
-            text="💡 이 Google 계정에 세션이 연결됩니다",
-            font=("맑은 고딕", 8),
+            text="💡 여러 계정: user1@gmail.com, user2@gmail.com",
+            font=("맑은 고딕", 7),
             fg="#999"
-        ).pack(anchor=tk.W, pady=(0, 15))
+        ).pack(anchor=tk.W, pady=(0, 10))
         
         # 네이버 아이디 입력
         tk.Label(
@@ -127,25 +130,16 @@ class NaverSessionCreator:
         )
         self.password_entry.pack(pady=(5, 20), ipady=5)
         
-        # 주의사항
-        warning_frame = tk.Frame(main_frame, bg="#FEF3C7", relief=tk.SOLID, borderwidth=1)
-        warning_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        warning_text = (
-            "⚠️ 주의사항\n\n"
-            "• 2단계 인증이 필요합니다\n"
-            "• 브라우저가 자동으로 열립니다\n"
-            "• 로그인 완료까지 대기해주세요\n"
-            "• SMS 인증 또는 앱 인증을 완료해주세요"
-        )
+        # 주의사항 (축소)
         tk.Label(
-            warning_frame,
-            text=warning_text,
-            font=("맑은 고딕", 9),
-            bg="#FEF3C7",
+            main_frame,
+            text="⚠️ 2단계 인증 필요 | 브라우저 자동 열림 | SMS/앱 인증 완료",
+            font=("맑은 고딕", 8),
             fg="#92400E",
-            justify=tk.LEFT
-        ).pack(padx=15, pady=10)
+            bg="#FEF3C7",
+            relief=tk.SOLID,
+            borderwidth=1
+        ).pack(fill=tk.X, pady=(0, 10), padx=2, ipady=8)
         
         # 진행 상황
         self.progress_label = tk.Label(
@@ -183,33 +177,37 @@ class NaverSessionCreator:
         self.start_button = tk.Button(
             button_frame,
             text="🚀 로그인 시작하기",
-            font=("맑은 고딕", 12, "bold"),
+            font=("맑은 고딕", 14, "bold"),
             bg="#4F46E5",
             fg="white",
             activebackground="#4338CA",
             activeforeground="white",
-            width=20,
+            width=18,
             height=2,
             cursor="hand2",
+            relief=tk.RAISED,
+            bd=3,
             command=self.start_process
         )
-        self.start_button.pack(side=tk.LEFT, padx=5)
+        self.start_button.pack(side=tk.LEFT, padx=10, pady=10)
         
         # 취소 버튼
         self.cancel_button = tk.Button(
             button_frame,
-            text="❌ 취소",
-            font=("맑은 고딕", 12),
+            text="✖ 취소",
+            font=("맑은 고딕", 14, "bold"),
             bg="#EF4444",
             fg="white",
             activebackground="#DC2626",
             activeforeground="white",
-            width=10,
+            width=12,
             height=2,
             cursor="hand2",
+            relief=tk.RAISED,
+            bd=3,
             command=self.cancel_process
         )
-        self.cancel_button.pack(side=tk.LEFT, padx=5)
+        self.cancel_button.pack(side=tk.LEFT, padx=10, pady=10)
     
     def update_progress(self, message, progress):
         """진행 상황 업데이트"""
@@ -219,18 +217,29 @@ class NaverSessionCreator:
     
     def start_process(self):
         """로그인 프로세스 시작"""
-        google_email = self.google_email_entry.get().strip()
+        # 🚀 여러 개의 Google Email 파싱
+        google_emails_input = self.google_email_text.get("1.0", tk.END).strip()
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
         
-        # 🚀 Google Email 검증
-        if not google_email:
+        # Google Email 검증 및 파싱
+        if not google_emails_input:
             messagebox.showerror("오류", "Google Email을 입력해주세요.")
             return
         
-        if "@" not in google_email or "." not in google_email:
-            messagebox.showerror("오류", "올바른 이메일 형식을 입력해주세요.\n예: user@gmail.com")
-            return
+        # 쉼표, 공백, 줄바꿈으로 분리
+        import re
+        google_emails = re.split(r'[,\n\s]+', google_emails_input)
+        google_emails = [email.strip() for email in google_emails if email.strip()]
+        
+        # 이메일 형식 검증
+        for email in google_emails:
+            if "@" not in email or "." not in email:
+                messagebox.showerror("오류", f"올바른 이메일 형식이 아닙니다:\n{email}\n\n예: user@gmail.com")
+                return
+        
+        # 쉼표로 연결하여 전달
+        google_email = ",".join(google_emails)
         
         if not username or not password:
             messagebox.showerror("오류", "네이버 아이디와 비밀번호를 모두 입력해주세요.")
@@ -437,8 +446,8 @@ class NaverSessionCreator:
         """성공 메시지 표시"""
         success_window = tk.Toplevel(self.window)
         success_window.title("완료")
-        success_window.geometry("400x350")  # 높이 증가
-        success_window.resizable(False, False)
+        success_window.geometry("450x400")  # 버튼이 보이도록
+        success_window.resizable(True, True)
         
         # 성공 아이콘
         tk.Label(
@@ -536,11 +545,9 @@ class NaverSessionCreator:
         success_window.destroy()
         
         # Google Email 초기화 (새로운 계정 입력)
-        self.google_email_entry.delete(0, tk.END)
+        self.google_email_text.delete("1.0", tk.END)
         
-        # 네이버 정보는 유지 (같은 세션)
-        # (자동으로 남아있음)
-        
+        # 네이버 정보는 유지
         # 진행률 초기화
         self.update_progress("대기 중...", 0)
         

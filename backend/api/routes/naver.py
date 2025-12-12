@@ -432,15 +432,19 @@ async def upload_session(
         if not google_email:
             google_email = "public"
         
+        # 쉼표로 구분된 이메일을 배열로 변환
+        new_emails = [e.strip() for e in google_email.split(",") if e.strip()]
+        
         # 기존 세션 확인
         existing_session = db.naver_sessions.find_one({"_id": session_data.user_id})
         
         if existing_session:
             # 🚀 기존 세션에 Google 계정 추가 (중복 방지)
             google_emails = existing_session.get("google_emails", [])
-            if google_email not in google_emails:
-                google_emails.append(google_email)
-                print(f"✅ Added {google_email} to session {session_data.user_id}")
+            for email in new_emails:
+                if email not in google_emails:
+                    google_emails.append(email)
+                    print(f"✅ Added {email} to session {session_data.user_id}")
             
             session_doc = {
                 "_id": session_data.user_id,
@@ -458,7 +462,7 @@ async def upload_session(
             session_doc = {
                 "_id": session_data.user_id,
                 "username": session_data.username,
-                "google_emails": [google_email],  # 배열로 시작!
+                "google_emails": new_emails,  # 여러 개 한번에!
                 "cookies": session_data.cookies,
                 "created_at": datetime.utcnow(),
                 "expires_at": datetime.utcnow() + timedelta(days=7),
