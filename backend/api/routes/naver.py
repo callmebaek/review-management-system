@@ -400,12 +400,14 @@ async def naver_logout():
 
 
 @router.post("/session/upload")
-async def upload_session(session_data: NaverSessionUpload):
+async def upload_session(
+    session_data: NaverSessionUpload,
+    google_email: str = Body(None)  # Google 계정 (선택)
+):
     """
     Upload Naver session from external tool (EXE)
     
-    This endpoint receives session cookies from the desktop tool
-    and stores them in MongoDB for cloud usage.
+    Google 계정과 연결하여 저장 (보안)
     """
     try:
         from utils.db import get_db
@@ -425,13 +427,18 @@ async def upload_session(session_data: NaverSessionUpload):
         if db is None:
             raise HTTPException(status_code=500, detail="Database connection failed")
         
+        # 🚀 Google 계정과 연결
+        if not google_email:
+            google_email = "public"  # Google 로그인 없이 업로드한 경우 (호환성)
+        
         # Prepare session document
         session_doc = {
             "_id": session_data.user_id,
             "username": session_data.username,
+            "google_email": google_email,  # 🚀 Google 계정 연결
             "cookies": session_data.cookies,
             "created_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(days=7),  # 7 days validity
+            "expires_at": datetime.utcnow() + timedelta(days=7),
             "last_used": datetime.utcnow(),
             "status": "active",
             "cookie_count": len(session_data.cookies)
@@ -464,9 +471,12 @@ async def upload_session(session_data: NaverSessionUpload):
 
 
 @router.get("/sessions/list")
-async def list_sessions():
+async def list_sessions(google_email: str = None):
     """
-    Get all available Naver sessions
+    Get Naver sessions for current Google user
+    
+    google_email이 없으면 모든 세션 (호환성)
+    있으면 해당 사용자의 세션만
     """
     try:
         from utils.db import get_db
@@ -478,8 +488,16 @@ async def list_sessions():
         if db is None:
             return {"sessions": []}
         
-        # Get all sessions
-        sessions = list(db.naver_sessions.find({}, {
+        # 🚀 Google 계정별 필터링
+        query = {}
+        if google_email:
+            query["google_email"] = google_email
+            print(f"🔍 Fetching sessions for: {google_email}")
+        else:
+            print("⚠️ Fetching all sessions (no filter)")
+        
+        # Get sessions
+        sessions = list(db.naver_sessions.find(query, {
             "_id": 1,
             "username": 1,
             "created_at": 1,

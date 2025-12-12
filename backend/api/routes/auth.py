@@ -95,18 +95,21 @@ async def google_callback(request: Request):
             service = build('oauth2', 'v2', credentials=credentials)
             user_info = service.userinfo().get().execute()
             user_email = user_info.get('email', 'unknown')
-            print(f"✅ Google user logged in: {user_email}")
+            user_name = user_info.get('name', '')
+            print(f"✅ Google user logged in: {user_email} ({user_name})")
         except:
             user_email = "default"
+            user_name = "Unknown"
         
         # Save credentials with email as user ID
         user_id = user_email
         token_manager.save_token(user_id, credentials)
         
-        # Redirect to frontend success page
-        # Use FRONTEND_URL from environment, fallback to localhost for local dev
+        # 🚀 사용자 정보를 쿼리 파라미터로 전달
+        import urllib.parse
         frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
-        return RedirectResponse(url=f"{frontend_url}/dashboard?auth=success")
+        redirect_url = f"{frontend_url}/dashboard?auth=success&email={urllib.parse.quote(user_email)}&name={urllib.parse.quote(user_name)}"
+        return RedirectResponse(url=redirect_url)
         
     except Exception as e:
         # Redirect to frontend with error

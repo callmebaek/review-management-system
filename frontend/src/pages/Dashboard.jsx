@@ -21,9 +21,14 @@ export default function Dashboard() {
     const initializeActiveUser = async () => {
       // localStorage에 active user가 없으면 자동 설정
       if (!activeNaverUser || activeNaverUser === 'null') {
-        try {
+        try:
           console.log('🔄 No active user, fetching sessions...')
-          const response = await apiClient.get('/api/naver/sessions/list')
+          
+          // 🚀 현재 로그인한 Google 계정의 세션만 조회
+          const googleEmail = localStorage.getItem('google_email') || null
+          const params = googleEmail ? { google_email: googleEmail } : {}
+          
+          const response = await apiClient.get('/api/naver/sessions/list', { params })
           const sessions = response.data.sessions || []
           
           if (sessions.length > 0) {
@@ -43,6 +48,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (searchParams.get('auth') === 'success') {
+      // 🚀 Google 사용자 정보 저장
+      const email = searchParams.get('email')
+      const name = searchParams.get('name')
+      
+      if (email) {
+        localStorage.setItem('google_email', email)
+        localStorage.setItem('google_name', name || '')
+        localStorage.setItem('user_logged_in', 'true')
+        console.log(`✅ Google 로그인: ${name} (${email})`)
+      }
+      
       setShowAuthSuccess(true)
       setTimeout(() => setShowAuthSuccess(false), 3000)
     }
