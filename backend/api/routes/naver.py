@@ -527,6 +527,7 @@ async def list_sessions(google_email: str = None):
         sessions = list(db.naver_sessions.find(query, {
             "_id": 1,
             "username": 1,
+            "google_emails": 1,  # 🚀 추가!
             "created_at": 1,
             "expires_at": 1,
             "status": 1,
