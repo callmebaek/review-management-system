@@ -1113,10 +1113,17 @@ class NaverPlaceAutomationSelenium:
                     continue
             
             if not target_review:
-                print(f"⚠️ Could not find review. Author: '{author}', Date: '{date}'")
-                print(f"⚠️ Trying to find all reviews on page for debugging...")
+                # 요일 제거된 값으로 에러 메시지
+                date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
+                author_prefix = author[:min(3, len(author))]
+                
+                print(f"❌ Could not find review!")
+                print(f"   Looking for: author starts with '{author_prefix}', date='{date_clean}'")
+                print(f"   Original: author='{author}', date='{date}'")
+                print(f"⚠️ Debugging - first 5 reviews on page:")
+                
                 # 디버깅: 페이지의 모든 리뷰 출력
-                for idx, li in enumerate(all_lis[:5]):  # 처음 5개만
+                for idx, li in enumerate(all_lis[:5]):
                     try:
                         debug_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
                         debug_date = ""
@@ -1125,11 +1132,12 @@ class NaverPlaceAutomationSelenium:
                             if re.search(r'20\d{2}\.', d.text):
                                 debug_date = d.text.strip()
                                 break
-                        print(f"  [{idx}] Author: '{debug_author}', Date: '{debug_date}'")
+                        debug_date_clean = re.sub(r'\([월화수목금토일]\)', '', debug_date).strip()
+                        print(f"  [{idx}] Author: '{debug_author}', Date: '{debug_date}' (clean: '{debug_date_clean}')")
                     except:
                         pass
                 
-                raise Exception(f"Could not find review: author='{author}', date='{date}'")
+                raise Exception(f"Could not find review: author='{author_prefix}...', date='{date_clean}'")
             
             # Scroll to review
             print("📜 Scrolling to review...")
