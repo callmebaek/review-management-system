@@ -22,7 +22,7 @@ class NaverSessionCreator:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("네이버 세션 생성기 v1.0")
-        self.window.geometry("500x600")
+        self.window.geometry("500x700")  # 600 → 700으로 증가
         self.window.resizable(False, False)
         
         # API 설정
