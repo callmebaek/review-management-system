@@ -151,15 +151,40 @@ async def load_reviews_async(
     
     # Start background thread
     def background_load():
+        import time as time_module
+        
         try:
             # Update status to processing
             task_manager.update_task_status(task_id, 'processing')
+            task_manager.update_progress(task_id, 0, '리뷰 로딩 시작...')
             
             # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
             from services.naver_automation_selenium import naver_automation_selenium
             
             # Set active user
             naver_automation_selenium.set_active_user(user_id)
+            
+            # 🚀 진행률 업데이트 스레드 시작
+            import threading
+            stop_progress = threading.Event()
+            
+            def update_progress_periodically():
+                while not stop_progress.is_set():
+                    try:
+                        # selenium에서 진행률 읽기
+                        progress = naver_automation_selenium.get_loading_progress(place_id)
+                        if progress and progress.get('count', 0) > 0:
+                            task_manager.update_progress(
+                                task_id,
+                                progress['count'],
+                                progress.get('message', '로딩 중...')
+                            )
+                    except:
+                        pass
+                    time_module.sleep(1)  # 1초마다 업데이트
+            
+            progress_thread = threading.Thread(target=update_progress_periodically, daemon=True)
+            progress_thread.start()
             
             # Load reviews (sync 함수 직접 호출)
             result = naver_automation_selenium.get_reviews(
@@ -170,9 +195,14 @@ async def load_reviews_async(
                 load_count=load_count
             )
             
+            # 진행률 업데이트 중지
+            stop_progress.set()
+            progress_thread.join(timeout=1)
+            
             # Store result
             task_manager.set_result(task_id, result)
             task_manager.update_task_status(task_id, 'completed')
+            task_manager.update_progress(task_id, len(result) if isinstance(result, list) else 0, '✅ 완료!')
             
         except Exception as e:
             print(f"❌ Background task {task_id} failed: {e}")

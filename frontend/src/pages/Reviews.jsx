@@ -311,15 +311,29 @@ export default function Reviews() {
                   key={option.count}
                   onClick={async () => {
                     console.log(`🔵 Option clicked: ${option.count}`)
-                    setSelectedLoadCount(option.count)
+                    
+                    // 🚀 CRITICAL: selectedLoadCount 먼저 업데이트
+                    const loadCount = option.count
+                    setSelectedLoadCount(loadCount)
                     setHasSelectedCount(true)
                     setShowLoadCountModal(false)
                     
-                    // 🚀 즉시 비동기 로딩 시작
+                    // 🚀 State 업데이트 후 비동기 로딩 시작
                     setTimeout(async () => {
-                      console.log('🚀 Starting async loading from option button...')
+                      console.log(`🚀 Starting async loading for ${loadCount} reviews...`)
                       try {
-                        await startAsyncLoading()
+                        const activeUser = localStorage.getItem('active_naver_user') || 'default'
+                        
+                        const response = await apiClient.post('/api/naver/reviews/load-async', {
+                          place_id: placeId,
+                          load_count: loadCount,  // 선택한 개수 사용
+                          user_id: activeUser
+                        })
+                        
+                        setAsyncTaskId(response.data.task_id)
+                        setUseAsyncLoading(true)
+                        
+                        console.log(`✅ Async loading started: ${response.data.task_id}`)
                       } catch (err) {
                         console.error('❌ Async loading error:', err)
                         alert('리뷰 로딩 시작 실패')
