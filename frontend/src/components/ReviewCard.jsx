@@ -43,30 +43,21 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
         setShowReplyForm(false)
         setReplyText('')
         
-        // 🚀 즉시 UI 업데이트 (optimistic)
+        // 🚀 즉시 UI 업데이트 (optimistic) + 페이지 강제 새로고침
         if (isNaver && placeId) {
           const currentDate = new Date().toISOString().split('T')[0].replace(/-/g, '.')
+          const replyText = task.result?.reply_text || currentReplyText || '답글'
           
-          // 캐시에서 해당 리뷰 찾아서 업데이트
-          queryClient.setQueryData(['naver-reviews', placeId], (oldData) => {
-            if (!oldData) return oldData
-            
-            const reviews = oldData.reviews || oldData
-            if (Array.isArray(reviews)) {
-              const updatedReviews = reviews.map(r => 
-                r.review_id === review.review_id
-                  ? { ...r, has_reply: true, reply: task.result?.reply_text || '답글', reply_date: currentDate }
-                  : r
-              )
-              return oldData.reviews ? { ...oldData, reviews: updatedReviews } : updatedReviews
-            }
-            return oldData
-          })
+          console.log(`🔄 Updating review ${review.review_id} with reply: ${replyText.substring(0, 30)}...`)
           
-          // 3초 후 서버에서 다시 가져오기 (검증)
+          // 캐시 완전 무효화 및 즉시 새로고침
+          queryClient.invalidateQueries(['naver-reviews'])
+          
+          // 1초 후 페이지 강제 새로고침 (확실하게)
           setTimeout(() => {
-            queryClient.invalidateQueries(['naver-reviews', placeId])
-          }, 3000)
+            console.log('🔄 Force reloading page to show reply...')
+            window.location.reload()
+          }, 1000)
         }
         
         if (onReplyPosted) {
