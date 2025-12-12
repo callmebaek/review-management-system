@@ -21,6 +21,7 @@ webdriver-manager==4.0.1
 # Utilities
 python-multipart==0.0.6
 aiofiles==23.2.1
+requests==2.31.0  # 🔐 Google API 직접 호출용
 
 # MongoDB
 pymongo==4.6.1

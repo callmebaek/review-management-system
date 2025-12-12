@@ -4,6 +4,7 @@ from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 import os
+import requests  # 🔐 Google API 직접 호출용
 from config import settings
 from utils.token_manager import token_manager
 
@@ -12,6 +13,9 @@ router = APIRouter()
 # OAuth 2.0 scopes
 SCOPES = [
     'https://www.googleapis.com/auth/business.manage',
+    'https://www.googleapis.com/auth/userinfo.email',  # 🔐 이메일 정보 가져오기
+    'https://www.googleapis.com/auth/userinfo.profile',  # 🔐 프로필 정보 가져오기
+    'openid',  # 🔐 OpenID Connect
 ]
 
 # OAuth 2.0 client configuration
@@ -86,14 +90,22 @@ async def google_callback(request: Request):
         
         credentials = flow.credentials
         
-        # 🚀 Get Google user info (email)
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-        
+        # 🚀 Get Google user info (email) - Using userinfo endpoint directly
         try:
-            # Get user info from Google
-            service = build('oauth2', 'v2', credentials=credentials)
-            user_info = service.userinfo().get().execute()
+            # 방법 1: Google UserInfo API를 직접 호출 (더 안정적)
+            headers = {
+                'Authorization': f'Bearer {credentials.token}'
+            }
+            response = requests.get(
+                'https://www.googleapis.com/oauth2/v2/userinfo',
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Google API returned {response.status_code}: {response.text}")
+            
+            user_info = response.json()
             user_email = user_info.get('email', None)
             user_name = user_info.get('name', '')
             
@@ -102,8 +114,12 @@ async def google_callback(request: Request):
                 raise Exception("Failed to get email from Google")
             
             print(f"✅ Google user logged in: {user_email} ({user_name})")
+            
         except Exception as e:
             print(f"❌ Failed to get Google user info: {e}")
+            import traceback
+            traceback.print_exc()
+            
             # 프론트엔드에 에러 전달
             frontend_url = os.getenv("FRONTEND_URL", f"http://localhost:{settings.frontend_port}")
             return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
