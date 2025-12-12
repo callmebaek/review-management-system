@@ -300,3 +300,4 @@ const errorMessages = {
 **담당자:** AI Assistant
 **우선순위:** 🔥 High (핫픽스)
 
+

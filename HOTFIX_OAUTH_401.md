@@ -420,3 +420,4 @@ heroku logs --tail | grep "Google user logged in"
 **우선순위:** 🔥 Critical (로그인 불가)
 **상태:** ✅ 수정 완료, 배포 대기
 
+

@@ -490,3 +490,4 @@ heroku logs --tail | grep "Reply posted"
 **상태:** ✅ 구현 완료, 배포 대기
 **테스트:** ✅ 완료 (에러 0개)
 
+
