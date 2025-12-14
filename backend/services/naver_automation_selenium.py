@@ -488,9 +488,18 @@ class NaverPlaceAutomationSelenium:
                 print("🏠 Accessing Smartplace business list...")
                 driver.get('https://new.smartplace.naver.com/bizes')
                 
-                # Wait for initial page load
-                print("⏳ Waiting for initial page load...")
-                time.sleep(2)
+                # 🚀 OPTIMIZATION 1: Smart wait instead of fixed sleep
+                print("⏳ Waiting for page to load (smart wait)...")
+                try:
+                    # Wait for body to be present (page started loading)
+                    WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "body"))
+                    )
+                    print("✅ Page body loaded")
+                    time.sleep(0.5)  # Reduced from 2s to 0.5s - just for JS execution
+                except Exception as wait_err:
+                    print(f"⚠️ Wait timeout, continuing anyway: {wait_err}")
+                    time.sleep(2)  # Fallback to original timing if wait fails
                 
                 # 🚀 CRITICAL: Handle popup/modal that appears on first visit
                 print("🔍 Checking for popups...")
@@ -504,23 +513,29 @@ class NaverPlaceAutomationSelenium:
                         "[class*='modal'] button"
                     ]
                     
+                    popup_found = False
                     for selector in popup_button_selectors:
                         try:
-                            popup_btn = driver.find_element(By.CSS_SELECTOR, selector)
-                            if popup_btn.is_displayed():
-                                print(f"  ✅ Found popup button: {selector}")
-                                driver.execute_script("arguments[0].click();", popup_btn)
-                                print("  ✅ Popup closed!")
-                                time.sleep(1)  # Wait for popup to close
-                                break
+                            # 🚀 OPTIMIZATION: Use WebDriverWait with short timeout
+                            popup_btn = WebDriverWait(driver, 1).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                            )
+                            print(f"  ✅ Found popup button: {selector}")
+                            driver.execute_script("arguments[0].click();", popup_btn)
+                            print("  ✅ Popup closed!")
+                            time.sleep(0.3)  # Reduced from 1s to 0.3s
+                            popup_found = True
+                            break
                         except:
                             continue
+                    
+                    if not popup_found:
+                        print("  ℹ️ No popup found (this is OK)")
                 except Exception as e:
-                    print(f"  ⚠️ No popup found (this is OK): {e}")
+                    print(f"  ℹ️ No popup handling needed: {e}")
                 
-                # Wait for loading indicator to disappear or content to appear
-                # 🚀 Reduced timeout from 30s to 10s
-                print("⏳ Waiting for content to load (up to 10 seconds)...")
+                # 🚀 OPTIMIZATION 1: Smart content detection with adaptive intervals
+                print("⏳ Waiting for content to load (smart detection)...")
                 max_wait = 10
                 start_time = time.time()
                 content_loaded = False
@@ -532,14 +547,21 @@ class NaverPlaceAutomationSelenium:
                         place_links = [link for link in all_links if link.get_attribute('href') and '/bizes/place/' in link.get_attribute('href')]
                         
                         if len(place_links) > 0:
-                            print(f"✅ Content loaded! Found {len(place_links)} place links")
+                            elapsed = time.time() - start_time
+                            print(f"✅ Content loaded! Found {len(place_links)} place links in {elapsed:.1f}s")
                             content_loaded = True
                             break
+                        
+                        # 🚀 OPTIMIZATION: Adaptive sleep intervals
+                        elapsed = time.time() - start_time
+                        if elapsed < 2:
+                            time.sleep(0.3)  # First 2 seconds: check every 0.3s
+                        elif elapsed < 5:
+                            time.sleep(0.5)  # 2-5 seconds: check every 0.5s
                         else:
-                            print(f"⏳ Still loading... ({int(time.time() - start_time)}s elapsed)")
-                            time.sleep(1)  # 🚀 Reduced from 2s to 1s
+                            time.sleep(0.8)  # After 5s: check every 0.8s
                     except:
-                        time.sleep(1)
+                        time.sleep(0.5)
                 
                 if not content_loaded:
                     print("⚠️ Timeout waiting for content to load - trying alternative method")
@@ -552,18 +574,10 @@ class NaverPlaceAutomationSelenium:
                     print("❌ Not logged in")
                     raise HTTPException(status_code=401, detail="Not logged in")
                 
-                # Take screenshot for debugging
-                screenshot_path = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.png")
-                driver.save_screenshot(screenshot_path)
-                print(f"📸 Screenshot saved: {screenshot_path}")
-                
-                # Save page source for debugging
+                # Get page source for parsing
                 page_source = driver.page_source
-                page_source_file = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.html")
-                with open(page_source_file, 'w', encoding='utf-8') as f:
-                    f.write(page_source)
-                print(f"📄 Page source saved: {page_source_file}")
                 
+                # 🚀 OPTIMIZATION 2: Debug files will be saved only if needed (at the end)
                 places = []
                 
                 # Method 1: Try to find place links in <a> tags
@@ -732,6 +746,23 @@ class NaverPlaceAutomationSelenium:
                 print(f"📊 Total places found: {len(places)}")
                 logger.info(f"✅ Found {len(places)} places")
                 
+                # 🚀 OPTIMIZATION 2: Save debug files only if no places found (error case)
+                if len(places) == 0:
+                    print("⚠️ No places found - saving debug files...")
+                    try:
+                        screenshot_path = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.png")
+                        driver.save_screenshot(screenshot_path)
+                        print(f"📸 Screenshot saved: {screenshot_path}")
+                        
+                        page_source_file = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.html")
+                        with open(page_source_file, 'w', encoding='utf-8') as f:
+                            f.write(page_source)
+                        print(f"📄 Page source saved: {page_source_file}")
+                    except Exception as debug_err:
+                        print(f"⚠️ Failed to save debug files: {debug_err}")
+                else:
+                    print(f"✅ Success! Skipping debug file save (optimization)")
+                
                 # 🚀 Save to cache (user별로 저장!)
                 self._places_cache[current_user_id] = places
                 self._places_cache_time[current_user_id] = datetime.now()
@@ -742,6 +773,16 @@ class NaverPlaceAutomationSelenium:
             except Exception as e:
                 print(f"❌ Error getting places: {e}")
                 logger.error(f"Error getting places: {e}")
+                
+                # 🚀 OPTIMIZATION 2: Save debug files on exception
+                if driver:
+                    try:
+                        screenshot_path = os.path.join(settings.data_dir, "naver_sessions", "bizes_list_error.png")
+                        driver.save_screenshot(screenshot_path)
+                        print(f"📸 Error screenshot saved: {screenshot_path}")
+                    except:
+                        pass
+                
                 raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
                 
             finally:
@@ -849,18 +890,30 @@ class NaverPlaceAutomationSelenium:
             self._loading_progress[place_id]['message'] = '📄 리뷰 페이지 접속 중...'
             driver.get(reviews_url)
             
-            print("⏳ Waiting for reviews page to load...")
+            # 🚀 OPTIMIZATION 1: Smart wait for page load
+            print("⏳ Waiting for reviews page to load (smart wait)...")
             self._loading_progress[place_id]['message'] = '⏳ 페이지 로딩 중...'
-            time.sleep(1)  # Reduced from 2 to 1
-            
-            # Handle popup (faster)
             try:
-                popup_btn = driver.find_element(By.CSS_SELECTOR, "button.Modal_btn_confirm__uQZFR")
-                if popup_btn.is_displayed():
-                    driver.execute_script("arguments[0].click();", popup_btn)
-                    time.sleep(0.5)  # Reduced from 1 to 0.5
+                # Wait for any list item to appear (page is ready)
+                WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "li"))
+                )
+                print("✅ Page content detected")
+                time.sleep(0.3)  # Reduced from 1s to 0.3s - just for JS to settle
             except:
-                pass
+                print("⚠️ No content detected yet, waiting 1s...")
+                time.sleep(1)  # Fallback to safe timing
+            
+            # 🚀 OPTIMIZATION 1: Handle popup with smart wait
+            try:
+                popup_btn = WebDriverWait(driver, 1).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button.Modal_btn_confirm__uQZFR"))
+                )
+                driver.execute_script("arguments[0].click();", popup_btn)
+                print("✅ Popup closed")
+                time.sleep(0.2)  # Reduced from 0.5s to 0.2s
+            except:
+                pass  # No popup found
             
             # 🚀 NEW STRATEGY: Skip UI filter, load ALL reviews directly
             # This is more stable and efficient than trying to click filters
@@ -925,14 +978,27 @@ class NaverPlaceAutomationSelenium:
                     if lis:
                         # 마지막 요소로 스크롤
                         driver.execute_script("arguments[0].scrollIntoView(true);", lis[-1])
-                        time.sleep(0.3)
+                        time.sleep(0.2)  # Reduced from 0.3s
                         # 추가 스크롤 (lazy loading 트리거)
                         driver.execute_script("window.scrollBy(0, 800);")
                     else:
                         driver.execute_script("window.scrollBy(0, 1200);")
                     
-                    # 🚀 CRITICAL: 네이버 lazy loading을 위해 충분히 대기
-                    time.sleep(1.5)  # 0.8 → 1.5초로 증가
+                    # 🚀 OPTIMIZATION 3: Dynamic wait time based on progress
+                    # 초반 (처음 50개): 안전하게 1.2초
+                    # 중반 (50-200개): 1.0초
+                    # 후반 (200개 이상): 0.8초
+                    # 변화 없을 때: 1.5초 (더 기다려야 할 수도 있음)
+                    if no_change > 0:
+                        wait_time = 1.5  # No change detected - wait longer
+                    elif current_count < 50:
+                        wait_time = 1.2  # Initial loading - be safe
+                    elif current_count < 200:
+                        wait_time = 1.0  # Middle - balanced
+                    else:
+                        wait_time = 0.8  # Later stage - faster
+                    
+                    time.sleep(wait_time)
                     
                 except Exception as e:
                     print(f"  ⚠️ Scroll error: {e}")
