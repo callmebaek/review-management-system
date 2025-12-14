@@ -16,35 +16,64 @@ export default function Dashboard() {
     () => localStorage.getItem('active_naver_user') || null
   )
   
-  // 🚀 자동 활성 계정 설정
+  // 🚀 자동 활성 계정 설정 및 유효성 검증
   useEffect(() => {
     const initializeActiveUser = async () => {
-      // localStorage에 active user가 없으면 자동 설정
-      if (!activeNaverUser || activeNaverUser === 'null') {
-        try {
-          console.log('🔄 No active user, fetching sessions...')
+      const googleEmail = localStorage.getItem('google_email') || null
+      const storedActiveUser = localStorage.getItem('active_naver_user')
+      
+      try {
+        console.log('🔄 Validating active_naver_user...')
+        console.log(`   Stored: ${storedActiveUser}`)
+        console.log(`   Google: ${googleEmail}`)
+        
+        // 🔐 현재 구글 계정의 세션만 조회
+        const params = googleEmail ? { google_email: googleEmail } : {}
+        const response = await apiClient.get('/api/naver/sessions/list', { params })
+        const sessions = response.data.sessions || []
+        
+        console.log(`   Available sessions: ${sessions.map(s => s.user_id).join(', ') || 'none'}`)
+        
+        // 🔐 유효성 검증: stored user가 현재 계정의 세션 목록에 있는가?
+        const isValid = storedActiveUser && sessions.some(s => s.user_id === storedActiveUser)
+        
+        if (!isValid && sessions.length > 0) {
+          // 🔄 유효하지 않음 → 첫 번째 유효한 세션으로 변경
+          const newUser = sessions[0].user_id
+          console.warn(`⚠️ Invalid active_naver_user '${storedActiveUser}', switching to '${newUser}'`)
           
-          // 🚀 현재 로그인한 Google 계정의 세션만 조회
-          const googleEmail = localStorage.getItem('google_email') || null
-          const params = googleEmail ? { google_email: googleEmail } : {}
+          setActiveNaverUser(newUser)
+          localStorage.setItem('active_naver_user', newUser)
           
-          const response = await apiClient.get('/api/naver/sessions/list', { params })
-          const sessions = response.data.sessions || []
-          
-          if (sessions.length > 0) {
-            const firstSession = sessions[0].user_id
-            console.log(`✅ Auto-selecting first session: ${firstSession}`)
-            setActiveNaverUser(firstSession)
-            localStorage.setItem('active_naver_user', firstSession)
-          }
-        } catch (err) {
-          console.error('Failed to auto-select session:', err)
+          // 🔄 캐시 완전 초기화 (이전 계정의 데이터 제거)
+          queryClient.clear()
+          console.log('🗑️ Cache cleared due to invalid active_naver_user')
+        } else if (!isValid && sessions.length === 0) {
+          // 🗑️ 세션이 아예 없음 → 초기화
+          console.log('🗑️ No sessions available, clearing active_naver_user')
+          setActiveNaverUser(null)
+          localStorage.removeItem('active_naver_user')
+        } else if (isValid) {
+          // ✅ 유효한 사용자 → 유지
+          console.log(`✅ Active user '${storedActiveUser}' is valid`)
+          setActiveNaverUser(storedActiveUser)
+        } else if (!storedActiveUser && sessions.length > 0) {
+          // 📝 active_naver_user가 없으면 첫 번째로 설정
+          const firstSession = sessions[0].user_id
+          console.log(`✅ Auto-selecting first session: ${firstSession}`)
+          setActiveNaverUser(firstSession)
+          localStorage.setItem('active_naver_user', firstSession)
         }
+      } catch (err) {
+        console.error('Failed to validate active user:', err)
+        // 🛡️ 에러 시 안전하게 초기화
+        localStorage.removeItem('active_naver_user')
+        setActiveNaverUser(null)
       }
     }
     
     initializeActiveUser()
-  }, [])
+  }, [])  // 빈 의존성 배열 (최초 1회만 실행)
 
   useEffect(() => {
     if (searchParams.get('auth') === 'success') {
@@ -213,10 +242,22 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      // 모든 로그인 관련 데이터 제거
+      // 🔐 모든 로그인 관련 데이터 완전 제거
+      console.log('🚪 Logging out and clearing all data...')
+      
+      // localStorage 개별 항목 제거
       localStorage.removeItem('user_logged_in')
-      localStorage.removeItem('active_naver_user')
-      localStorage.clear()  // 모든 localStorage 클리어
+      localStorage.removeItem('google_email')
+      localStorage.removeItem('google_name')
+      localStorage.removeItem('active_naver_user')  // 🔥 중요!
+      
+      // 모든 localStorage 클리어
+      localStorage.clear()
+      
+      // sessionStorage도 클리어
+      sessionStorage.clear()
+      
+      console.log('✅ All local data cleared')
       
       // 백엔드 로그아웃 시도 (실패해도 계속 진행)
       try {
@@ -231,6 +272,7 @@ export default function Dashboard() {
       console.error('Logout error:', err)
       // 에러가 나도 강제 로그아웃
       localStorage.clear()
+      sessionStorage.clear()
       window.location.replace('/login')
     }
   }
