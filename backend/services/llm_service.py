@@ -94,12 +94,66 @@ class LLMService:
         
         return template or prompts["default"][category]
     
-    def generate_reply(self, request: GenerateReplyRequest) -> GenerateReplyResponse:
+    def _build_custom_system_prompt(self, place_settings) -> str:
+        """
+        Build customized system prompt based on place settings
+        
+        Args:
+            place_settings: PlaceAISettings object with custom configurations
+        
+        Returns:
+            Customized system prompt string
+        """
+        # Map numeric values to descriptive terms
+        friendliness_level = "매우 친절하고 따뜻한" if place_settings.friendliness >= 8 else "친절한" if place_settings.friendliness >= 5 else "전문적이고 정중한"
+        
+        formality_desc = ""
+        if place_settings.formality >= 8:
+            formality_desc = "격식있는 존댓말을 사용하며, 공손하고 품위있게"
+        elif place_settings.formality >= 5:
+            formality_desc = "자연스러운 존댓말을 사용하며"
+        else:
+            formality_desc = "편안한 반말체를 사용하며 친근하게"
+        
+        emoticon_instruction = "텍스트 이모티콘(^^, ㅎㅎ, :) 등)을 적절히 사용하여 친근함을 표현한다." if place_settings.use_text_emoticons else "이모티콘 없이 텍스트만으로 표현한다."
+        
+        specifics_instruction = "리뷰에서 언급된 구체적인 내용(맛, 분위기, 서비스 등)을 반드시 답글에 포함시킨다." if place_settings.mention_specifics else "전반적인 감사 인사 위주로 작성한다."
+        
+        brand_voice_desc = {
+            "warm": "따뜻하고 감성적인",
+            "professional": "전문적이고 신뢰감 있는",
+            "casual": "캐주얼하고 편안한",
+            "friendly": "친근하고 활기찬"
+        }.get(place_settings.brand_voice, "따뜻한")
+        
+        response_style_desc = {
+            "quick_thanks": "신속한 감사 표현 중심",
+            "empathy": "공감과 이해 중심",
+            "solution": "문제 해결과 개선 의지 표현 중심"
+        }.get(place_settings.response_style, "감사 중심")
+        
+        system_prompt = f"""[ROLE]
+너는 네이버 플레이스 리뷰에 답글을 다는 "매장 CS 담당자"다. 리뷰를 정확히 읽고 이해한 뒤, {friendliness_level} 톤으로 답글을 작성한다.
+
+[TONE & STYLE]
+- {formality_desc} 답글을 작성한다
+- {brand_voice_desc} 브랜드 보이스를 유지한다
+- {response_style_desc}으로 답글을 작성한다
+- {emoticon_instruction}
+- {specifics_instruction}"""
+        
+        if place_settings.custom_instructions:
+            system_prompt += f"\n\n[매장 특별 요청사항]\n{place_settings.custom_instructions}"
+        
+        return system_prompt
+    
+    def generate_reply(self, request: GenerateReplyRequest, place_settings=None) -> GenerateReplyResponse:
         """
         Generate a reply to a review using OpenAI
         
         Args:
             request: GenerateReplyRequest containing review details
+            place_settings: Optional PlaceAISettings for customization
         
         Returns:
             GenerateReplyResponse with generated reply
@@ -110,8 +164,21 @@ class LLMService:
             # Get appropriate prompt template
             template = self._get_prompt_template(request.rating, request.store_name)
             
-            # Build system prompt (CS 담당자 역할)
-            system_prompt = """[ROLE]
+            # Determine parameters based on place_settings
+            if place_settings:
+                temperature = place_settings.diversity
+                max_tokens = int(place_settings.reply_length_max * 1.5)  # 여유를 두고 설정
+                system_prompt = self._build_custom_system_prompt(place_settings)
+                min_length = place_settings.reply_length_min
+                max_length = place_settings.reply_length_max
+            else:
+                # Default values
+                temperature = 0.9
+                max_tokens = 500
+                min_length = 100
+                max_length = 450
+                # Build default system prompt
+                system_prompt = """[ROLE]
 너는 네이버 플레이스 리뷰에 답글을 다는 "매장 CS 담당자"다. 리뷰를 정확히 읽고 이해한 뒤, 항상 친절하고 긍정적인 톤으로 답글을 작성한다.
 
 [CRITICAL: 다양성 최우선]
@@ -135,6 +202,10 @@ class LLMService:
 {review_text}
 
 **답글 작성 가이드**
+
+[LENGTH REQUIREMENT]
+- 답글 길이: {min_length}~{max_length}자 사이로 작성
+- 너무 짧거나 길지 않게, 이 범위 내에서 자연스럽게 작성
 
 [STYLE RULES]
 🔥 핵심 원칙: 이 답글은 세상에 단 하나뿐이어야 한다. 다른 답글과 겹치지 않는 독특한 시작과 마무리를 사용하라.
@@ -173,9 +244,9 @@ class LLMService:
    🔥 핵심: 위 예시를 그대로 쓰지 말고, 이 분위기로 매번 새롭게 창작하라!
 
 4. 길이
-   - 기본 2~4문장, 최대 450자 이내
+   - {min_length}~{max_length}자 사이로 작성 (이 범위를 반드시 지킬 것)
    - 🚨 이모지 사용 금지 (시스템 호환성 문제)
-   - "ㅋㅋ", ":)", "^^" 같은 텍스트 이모티콘은 OK
+   - "ㅋㅋ", ":)", "^^" 같은 텍스트 이모티콘은 설정에 따라 사용
    - "ㅎㅎ"는 고객 리뷰에 있을 때만 1회 정도 가능
 
 5. 금지
@@ -221,15 +292,15 @@ class LLMService:
             if request.custom_instructions:
                 user_prompt += f"\n\n**추가 요청사항**\n{request.custom_instructions}"
             
-            # Call OpenAI API
+            # Call OpenAI API with customized parameters
             response = client.chat.completions.create(
                 model=settings.openai_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.9,  # 🔥 높은 다양성 (0.7 → 0.9)
-                max_tokens=500,  # 350자 제한 대응 (한글 ~350자 = ~400-500 토큰)
+                temperature=temperature,  # Customizable diversity
+                max_tokens=max_tokens,  # Customizable length
                 frequency_penalty=0.8,  # 🔥 반복 패턴 강력 억제
                 presence_penalty=0.6   # 🔥 새로운 표현 장려
             )

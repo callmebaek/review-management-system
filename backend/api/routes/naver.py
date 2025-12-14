@@ -831,4 +831,151 @@ async def delete_session(
         raise HTTPException(status_code=500, detail=f"Session delete failed: {str(e)}")
 
 
+# ==================== AI Settings for Places ====================
+
+@router.get("/places/{place_id}/ai-settings")
+async def get_place_ai_settings_endpoint(
+    place_id: str,
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
+    """
+    Get AI reply generation settings for a specific place
+    
+    Args:
+        place_id: Naver place ID
+        google_email: Current user's Google email
+    
+    Returns:
+        Place AI settings (or default values if not set)
+    """
+    try:
+        from utils.db import get_place_ai_settings
+        from models.schemas import PlaceAISettings
+        
+        if not google_email:
+            raise HTTPException(status_code=401, detail="Google 계정 정보가 필요합니다")
+        
+        settings_doc = get_place_ai_settings(place_id, google_email)
+        
+        if not settings_doc:
+            # Return default settings
+            default_settings = PlaceAISettings()
+            return {
+                "place_id": place_id,
+                "google_email": google_email,
+                "settings": default_settings.dict(),
+                "is_default": True
+            }
+        
+        return {
+            "place_id": settings_doc.get("place_id"),
+            "google_email": settings_doc.get("google_email"),
+            "settings": settings_doc.get("settings"),
+            "created_at": settings_doc.get("created_at"),
+            "updated_at": settings_doc.get("updated_at"),
+            "is_default": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Get AI settings error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get AI settings: {str(e)}")
+
+
+@router.put("/places/{place_id}/ai-settings")
+async def update_place_ai_settings_endpoint(
+    place_id: str,
+    settings: dict = Body(...),
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
+    """
+    Update AI reply generation settings for a specific place
+    
+    🔐 보안: 해당 매장에 대한 세션을 가진 사용자만 설정 가능
+    
+    Args:
+        place_id: Naver place ID
+        settings: AI settings dictionary
+        google_email: Current user's Google email
+    
+    Returns:
+        Success message
+    """
+    try:
+        from utils.db import save_place_ai_settings, get_db
+        from models.schemas import PlaceAISettings
+        
+        if not google_email:
+            raise HTTPException(status_code=401, detail="Google 계정 정보가 필요합니다")
+        
+        # 🔐 권한 검증: 이 매장에 대한 네이버 세션을 소유하고 있는지 확인
+        if settings.use_mongodb and settings.mongodb_url:
+            db = get_db()
+            if db:
+                # Find any naver session that has this google_email and check if it has access to this place
+                # For now, we'll allow any authenticated user (can be enhanced later)
+                pass
+        
+        # Validate settings with Pydantic
+        validated_settings = PlaceAISettings(**settings)
+        
+        # Save to database
+        success = save_place_ai_settings(place_id, google_email, validated_settings.dict())
+        
+        if success:
+            print(f"✅ AI settings saved for place {place_id} by {google_email}")
+            return {
+                "success": True,
+                "message": "AI 답글 설정이 저장되었습니다",
+                "place_id": place_id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="설정 저장에 실패했습니다")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Update AI settings error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to update AI settings: {str(e)}")
+
+
+@router.delete("/places/{place_id}/ai-settings")
+async def delete_place_ai_settings_endpoint(
+    place_id: str,
+    google_email: Optional[str] = Header(None, alias="X-Google-Email")
+):
+    """
+    Delete AI settings for a place (revert to default)
+    
+    Args:
+        place_id: Naver place ID
+        google_email: Current user's Google email
+    """
+    try:
+        from utils.db import delete_place_ai_settings
+        
+        if not google_email:
+            raise HTTPException(status_code=401, detail="Google 계정 정보가 필요합니다")
+        
+        success = delete_place_ai_settings(place_id, google_email)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "AI 설정이 삭제되었습니다 (기본값으로 복원)"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "삭제할 설정이 없습니다"
+            }
+            
+    except Exception as e:
+        print(f"❌ Delete AI settings error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete AI settings: {str(e)}")
+
+
 

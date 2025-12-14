@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../api/client'
 import ReviewCard from '../components/ReviewCard'
-import { ChevronLeft, Filter, AlertCircle, Loader2 } from 'lucide-react'
+import AISettingsModal from '../components/AISettingsModal'
+import { ChevronLeft, Filter, AlertCircle, Loader2, Settings } from 'lucide-react'
 
 export default function Reviews() {
   const navigate = useNavigate()
@@ -32,6 +33,9 @@ export default function Reviews() {
   const [useAsyncLoading, setUseAsyncLoading] = useState(false)
   const [asyncTaskId, setAsyncTaskId] = useState(null)
   const [asyncProgress, setAsyncProgress] = useState(null)
+  
+  // 🎨 AI Settings Modal
+  const [showAISettingsModal, setShowAISettingsModal] = useState(false)
 
   // Fetch GBP reviews
   const { data: gbpReviewsData, isLoading: gbpLoading, error: gbpError, refetch: refetchGBP } = useQuery({
@@ -451,7 +455,7 @@ export default function Reviews() {
         {/* Stats Bar */}
         {reviewsData && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 ${platform === 'naver' ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6`}>
               <div>
                 <p className="text-sm font-medium text-gray-600">총 리뷰</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
@@ -499,6 +503,19 @@ export default function Reviews() {
                   )}
                 </div>
               </div>
+              {/* AI 설정 버튼 (네이버만) */}
+              {platform === 'naver' && placeId && (
+                <div>
+                  <p className="text-sm font-medium text-gray-600">AI 답글 설정</p>
+                  <button
+                    onClick={() => setShowAISettingsModal(true)}
+                    className="mt-2 flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition shadow-sm"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span className="text-sm font-medium">설정</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -758,6 +775,16 @@ export default function Reviews() {
           </div>
         )}
       </main>
+      
+      {/* AI Settings Modal */}
+      {platform === 'naver' && placeId && (
+        <AISettingsModal
+          isOpen={showAISettingsModal}
+          onClose={() => setShowAISettingsModal(false)}
+          placeId={placeId}
+          placeName={naverPlaces?.find(p => p.place_id === placeId)?.name}
+        />
+      )}
     </div>
   )
 }

@@ -11,12 +11,22 @@ async def generate_review_reply(request: GenerateReplyRequest):
     Generate an AI-powered reply to a review
     
     Args:
-        request: GenerateReplyRequest with review details
+        request: GenerateReplyRequest with review details (including optional place_settings)
         
     Returns:
         GenerateReplyResponse with generated reply text
     """
-    return llm_service.generate_reply(request)
+    # Convert place_settings dict to PlaceAISettings if provided
+    place_settings_obj = None
+    if request.place_settings:
+        try:
+            from models.schemas import PlaceAISettings
+            place_settings_obj = PlaceAISettings(**request.place_settings)
+            print(f"🎨 Using custom AI settings: friendliness={place_settings_obj.friendliness}, formality={place_settings_obj.formality}")
+        except Exception as e:
+            print(f"⚠️ Failed to parse place_settings, using defaults: {e}")
+    
+    return llm_service.generate_reply(request, place_settings=place_settings_obj)
 
 
 @router.post("/reload-prompts")

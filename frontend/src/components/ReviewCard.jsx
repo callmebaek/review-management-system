@@ -127,10 +127,24 @@ export default function ReviewCard({ review, reviewIndex, platform = 'gbp', loca
       // Naver reviews don't have ratings, so use default value 3 (neutral)
       const rating = isNaver ? (review.rating || 3) : getRatingNumber(review.star_rating)
 
+      // 🎨 Load place-specific AI settings (for Naver only)
+      let placeSettings = null
+      if (isNaver && placeId) {
+        try {
+          const settingsResponse = await apiClient.get(`/api/naver/places/${placeId}/ai-settings`)
+          placeSettings = settingsResponse.data.settings
+          console.log('🎨 Loaded AI settings for place:', placeId, placeSettings)
+        } catch (settingsErr) {
+          console.warn('⚠️ Failed to load AI settings, using defaults:', settingsErr)
+          // Continue with default settings if loading fails
+        }
+      }
+
       const response = await apiClient.post('/api/reviews/generate-reply', {
         review_text: reviewText,
         rating: rating,
         store_name: locationName || null,
+        place_settings: placeSettings,  // 🎨 Include place settings
         custom_instructions: null
       })
 

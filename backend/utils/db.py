@@ -272,3 +272,101 @@ def get_user_data(user_id: str) -> Optional[Dict[str, Any]]:
     else:
         return None
 
+
+# ==================== Place AI Settings ====================
+
+def get_place_ai_settings(place_id: str, google_email: str) -> Optional[Dict[str, Any]]:
+    """
+    Get AI settings for a specific place
+    
+    Args:
+        place_id: Naver place ID
+        google_email: Google account email
+        
+    Returns:
+        AI settings document or None
+    """
+    if not is_mongodb_available():
+        logger.warning("⚠️ MongoDB not available. Cannot get AI settings.")
+        return None
+    
+    try:
+        db = get_db()
+        settings = db.place_ai_settings.find_one({
+            "place_id": place_id,
+            "google_email": google_email
+        })
+        if settings:
+            logger.info(f"✅ AI settings retrieved for place {place_id}")
+        return settings
+    except Exception as e:
+        logger.error(f"❌ Failed to get AI settings from MongoDB: {e}")
+        return None
+
+
+def save_place_ai_settings(place_id: str, google_email: str, settings: Dict[str, Any]) -> bool:
+    """
+    Save AI settings for a specific place
+    
+    Args:
+        place_id: Naver place ID
+        google_email: Google account email
+        settings: AI settings dictionary
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not is_mongodb_available():
+        logger.warning("⚠️ MongoDB not available. Cannot save AI settings.")
+        return False
+    
+    try:
+        db = get_db()
+        db.place_ai_settings.update_one(
+            {"place_id": place_id, "google_email": google_email},
+            {
+                "$set": {
+                    "settings": settings,
+                    "updated_at": datetime.utcnow()
+                },
+                "$setOnInsert": {
+                    "place_id": place_id,
+                    "google_email": google_email,
+                    "created_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+        logger.info(f"✅ AI settings saved for place {place_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Failed to save AI settings to MongoDB: {e}")
+        return False
+
+
+def delete_place_ai_settings(place_id: str, google_email: str) -> bool:
+    """
+    Delete AI settings for a specific place
+    
+    Args:
+        place_id: Naver place ID
+        google_email: Google account email
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not is_mongodb_available():
+        logger.warning("⚠️ MongoDB not available. Cannot delete AI settings.")
+        return False
+    
+    try:
+        db = get_db()
+        result = db.place_ai_settings.delete_one({
+            "place_id": place_id,
+            "google_email": google_email
+        })
+        logger.info(f"✅ AI settings deleted for place {place_id}")
+        return result.deleted_count > 0
+    except Exception as e:
+        logger.error(f"❌ Failed to delete AI settings from MongoDB: {e}")
+        return False
