@@ -39,9 +39,9 @@ class NaverPlaceAutomationSelenium:
         import threading
         self._user_lock = threading.Lock()  # API 호출 간 user_id 보호
         
-        # 🚀 Performance optimization: Cache for places list
-        self._places_cache: Optional[List[Dict]] = None
-        self._places_cache_time: Optional[datetime] = None
+        # 🚀 Performance optimization: Cache for places list (user별로 분리!)
+        self._places_cache: Dict[str, List[Dict]] = {}  # {user_id: [places]}
+        self._places_cache_time: Dict[str, datetime] = {}  # {user_id: datetime}
         self._cache_ttl = timedelta(minutes=5)  # 5분간 캐시 유지
 
         # 🚀 REVIEWS CACHE (Performance & Pagination Fix)
@@ -463,23 +463,23 @@ class NaverPlaceAutomationSelenium:
         
         # 🔒 Lock으로 race condition 방지
         with self._user_lock:
-            print(f"🔒 Acquired lock for get_places() - user: {self.active_user_id}")
+            current_user_id = self.active_user_id  # Race condition 방지
+            print(f"🔒 Acquired lock for get_places() - user: {current_user_id}")
             
-            # 🚀 Check cache first
-            if self._places_cache is not None and self._places_cache_time is not None:
-                cache_age = datetime.now() - self._places_cache_time
+            # 🚀 Check cache first (user별로 확인!)
+            if current_user_id in self._places_cache and current_user_id in self._places_cache_time:
+                cache_age = datetime.now() - self._places_cache_time[current_user_id]
                 if cache_age < self._cache_ttl:
-                    print(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                    logger.info(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                    return self._places_cache
+                    print(f"⚡ Using cached places for user {current_user_id} (age: {int(cache_age.total_seconds())}s)")
+                    logger.info(f"⚡ Using cached places for user {current_user_id} (age: {int(cache_age.total_seconds())}s)")
+                    return self._places_cache[current_user_id]
                 else:
-                    print(f"🔄 Cache expired (age: {int(cache_age.total_seconds())}s), refreshing...")
-                    logger.info("🔄 Cache expired, refreshing...")
+                    print(f"🔄 Cache expired for user {current_user_id} (age: {int(cache_age.total_seconds())}s), refreshing...")
+                    logger.info(f"🔄 Cache expired for user {current_user_id}, refreshing...")
             
             driver = None
             try:
-                # 🔒 현재 user_id 저장 (race condition 방지)
-                current_user_id = self.active_user_id
+                # current_user_id는 위에서 이미 선언됨 (Lock 내부)
                 print(f"📍 Getting places from Smartplace Center for user: {current_user_id}")
                 logger.info(f"📍 Getting places for user: {current_user_id}")
                 driver = self._create_driver(headless=True, user_id=current_user_id)
@@ -732,10 +732,10 @@ class NaverPlaceAutomationSelenium:
                 print(f"📊 Total places found: {len(places)}")
                 logger.info(f"✅ Found {len(places)} places")
                 
-                # 🚀 Save to cache
-                self._places_cache = places
-                self._places_cache_time = datetime.now()
-                print(f"💾 Cached {len(places)} places for 5 minutes")
+                # 🚀 Save to cache (user별로 저장!)
+                self._places_cache[current_user_id] = places
+                self._places_cache_time[current_user_id] = datetime.now()
+                print(f"💾 Cached {len(places)} places for user {current_user_id} (5 minutes)")
                 
                 return places
                 
@@ -1825,12 +1825,16 @@ class NaverPlaceAutomationSelenium:
             if os.path.exists(self.session_file):
                 os.remove(self.session_file)
             
-            # 🚀 Clear cache on logout
-            self._places_cache = None
-            self._places_cache_time = None
+            # 🚀 Clear cache on logout (user별로 클리어!)
+            current_user = self.active_user_id
+            if current_user in self._places_cache:
+                del self._places_cache[current_user]
+            if current_user in self._places_cache_time:
+                del self._places_cache_time[current_user]
+            # Reviews cache는 place_id별로 관리되므로 전체 클리어 (추후 개선 가능)
             self._reviews_cache = {}  # Clear reviews cache too
             self._loading_progress = {}  # Clear progress too
-            print("🗑️ Cache cleared on logout")
+            print(f"🗑️ Cache cleared for user {current_user}")
             
             return {
                 'success': True,
