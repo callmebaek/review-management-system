@@ -699,6 +699,54 @@ class NaverPlaceAutomationSelenium:
                 if len(places) == 0:
                     print("🔍 No places found in links - trying regex extraction from page source...")
                     try:
+                        import re
+                        place_id_pattern = r'/bizes/place/(\d+)'
+                        matches = re.finditer(place_id_pattern, page_source)
+                        
+                        place_ids_found = set()
+                        for match in matches:
+                            place_id = match.group(1)
+                            if place_id not in place_ids_found:
+                                place_ids_found.add(place_id)
+                        
+                        for place_id in place_ids_found:
+                            name_pattern = rf'place/{place_id}[^{{}}]*?"businessName":"([^"]+)"'
+                            name_match = re.search(name_pattern, page_source)
+                            
+                            if name_match:
+                                place_name = name_match.group(1)
+                            else:
+                                place_name = f"매장 {place_id}"
+                            
+                            places.append({
+                                'place_id': place_id,
+                                'name': place_name,
+                                'url': f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews'
+                            })
+                            print(f"✅ Extracted place: {place_name} (ID: {place_id})")
+                    
+                    except Exception as e:
+                        print(f"⚠️ Error extracting places from page source: {e}")
+                        logger.error(f"Error extracting places from page source: {e}")
+                
+                print(f"📊 Total places found: {len(places)}")
+                logger.info(f"✅ Found {len(places)} places")
+                
+                # 🚀 Save to cache
+                self._places_cache = places
+                self._places_cache_time = datetime.now()
+                print(f"💾 Cached {len(places)} places for 5 minutes")
+                
+                return places
+                
+            except Exception as e:
+                print(f"❌ Error getting places: {e}")
+                logger.error(f"Error getting places: {e}")
+                raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
+                
+            finally:
+                if driver:
+                    driver.quit()
     
     def get_reviews(self, place_id: str, page: int = 1, page_size: int = 20, filter_type: str = 'all', load_count: int = 300) -> List[Dict]:
         """Get reviews for a place from Smartplace Center (BATCH LOADING + CACHE)
