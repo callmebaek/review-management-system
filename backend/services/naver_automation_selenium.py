@@ -35,6 +35,10 @@ class NaverPlaceAutomationSelenium:
         # 🚀 Multi-account support
         self.active_user_id = "default"  # Default user
         
+        # 🔒 Thread Lock for race condition prevention
+        import threading
+        self._user_lock = threading.Lock()  # API 호출 간 user_id 보호
+        
         # 🚀 Performance optimization: Cache for places list
         self._places_cache: Optional[List[Dict]] = None
         self._places_cache_time: Optional[datetime] = None
@@ -82,10 +86,19 @@ class NaverPlaceAutomationSelenium:
         self.active_user_id = user_id
         print(f"🔄 Active user switched to: {user_id}")
     
-    def _create_driver(self, headless=True):
-        """Create and configure Chrome WebDriver"""
-        print("🌐 Creating Chrome WebDriver...")
-        logger.info("🌐 Creating Chrome WebDriver...")
+    def _create_driver(self, headless=True, user_id=None):
+        """
+        Create and configure Chrome WebDriver
+        
+        Args:
+            headless: Run in headless mode
+            user_id: User ID for session loading (if None, uses self.active_user_id)
+        """
+        # 🔒 user_id 파라미터 우선 사용 (race condition 방지)
+        effective_user_id = user_id if user_id else self.active_user_id
+        
+        print(f"🌐 Creating Chrome WebDriver for user: {effective_user_id}")
+        logger.info(f"🌐 Creating Chrome WebDriver for user: {effective_user_id}")
         
         chrome_options = Options()
         if headless:
@@ -172,10 +185,10 @@ class NaverPlaceAutomationSelenium:
         # Try to load session (MongoDB first, then local file)
         cookies = None
         
-        # Priority 1: Try MongoDB (cloud storage) with active user ID
-        cookies = self._load_session_from_mongodb(self.active_user_id)
+        # Priority 1: Try MongoDB (cloud storage) with effective user ID
+        cookies = self._load_session_from_mongodb(effective_user_id)
         if cookies:
-            print(f"✅ Using session from MongoDB (cloud) for user: {self.active_user_id}")
+            print(f"✅ Using session from MongoDB (cloud) for user: {effective_user_id}")
         # Priority 2: Try local file (fallback)
         elif os.path.exists(self.session_file):
             print("📂 Using session from local file")
@@ -448,22 +461,28 @@ class NaverPlaceAutomationSelenium:
         # ... (Same as before)
         """Get list of places from Smartplace Center (with 5-minute cache)"""
         
-        # 🚀 Check cache first
-        if self._places_cache is not None and self._places_cache_time is not None:
-            cache_age = datetime.now() - self._places_cache_time
-            if cache_age < self._cache_ttl:
-                print(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                logger.info(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                return self._places_cache
-            else:
-                print(f"🔄 Cache expired (age: {int(cache_age.total_seconds())}s), refreshing...")
-                logger.info("🔄 Cache expired, refreshing...")
-        
-        driver = None
-        try:
-            print("📍 Getting places from Smartplace Center...")
-            logger.info("📍 Getting places...")
-            driver = self._create_driver(headless=True)
+        # 🔒 Lock으로 race condition 방지
+        with self._user_lock:
+            print(f"🔒 Acquired lock for get_places() - user: {self.active_user_id}")
+            
+            # 🚀 Check cache first
+            if self._places_cache is not None and self._places_cache_time is not None:
+                cache_age = datetime.now() - self._places_cache_time
+                if cache_age < self._cache_ttl:
+                    print(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
+                    logger.info(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
+                    return self._places_cache
+                else:
+                    print(f"🔄 Cache expired (age: {int(cache_age.total_seconds())}s), refreshing...")
+                    logger.info("🔄 Cache expired, refreshing...")
+            
+            driver = None
+            try:
+                # 🔒 현재 user_id 저장 (race condition 방지)
+                current_user_id = self.active_user_id
+                print(f"📍 Getting places from Smartplace Center for user: {current_user_id}")
+                logger.info(f"📍 Getting places for user: {current_user_id}")
+                driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Go to business list page
             print("🏠 Accessing Smartplace business list...")
@@ -653,6 +672,8 @@ class NaverPlaceAutomationSelenium:
     def get_reviews(self, place_id: str, page: int = 1, page_size: int = 20, filter_type: str = 'all', load_count: int = 300) -> List[Dict]:
         """Get reviews for a place from Smartplace Center (BATCH LOADING + CACHE)
         
+        🔒 Lock으로 race condition 방지
+        
         New Strategy: Load specified number of reviews, then filter on frontend
         
         Args:
@@ -724,10 +745,13 @@ class NaverPlaceAutomationSelenium:
         # 🚀 USER CHOICE: Load exactly what user requested
         TARGET_LOAD_COUNT = load_count
         
+        # 🔒 현재 user_id 미리 저장 (race condition 방지)
+        current_user_id = self.active_user_id
+        
         driver = None
         try:
             # 🚀 CRITICAL: Initialize progress tracking BEFORE anything
-            print(f"🔄 Initializing progress tracking for {place_id}")
+            print(f"🔄 Initializing progress tracking for {place_id}, user: {current_user_id}")
             self._loading_progress[place_id] = {
                 'status': 'loading',
                 'count': 0,
@@ -736,7 +760,7 @@ class NaverPlaceAutomationSelenium:
             }
             logger.info(f"Progress initialized: {self._loading_progress[place_id]}")
             
-            driver = self._create_driver(headless=True)
+            driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Update progress
             self._loading_progress[place_id]['message'] = '🔐 세션 로딩 중...'
@@ -1045,16 +1069,17 @@ class NaverPlaceAutomationSelenium:
         """
         import re
         
+        # 🔒 현재 user_id 미리 저장 (race condition 방지)
+        if user_id:
+            self.set_active_user(user_id)
+        current_user_id = self.active_user_id
+        
         driver = None
         try:
-            print(f"💬 Posting reply to: {author} ({date}) for user: {user_id}")
+            print(f"💬 Posting reply to: {author} ({date}) for user: {current_user_id}")
             print(f"🎯 Target: {expected_count} reviews to render")
             
-            # 🚀 user_id 설정
-            if user_id:
-                self.set_active_user(user_id)
-            
-            driver = self._create_driver(headless=True)
+            driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Go to reviews page
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
@@ -1411,12 +1436,15 @@ class NaverPlaceAutomationSelenium:
         """
         리뷰 순서(index)로 찾아서 답글 게시 (순서 불일치 위험 있음)
         """
+        # 🔒 현재 user_id 미리 저장 (race condition 방지)
+        current_user_id = self.active_user_id
+        
         driver = None
         try:
-            print(f"💬 Posting reply to review at index: {review_index}")
-            logger.info(f"💬 Posting reply at index: {review_index}")
+            print(f"💬 Posting reply to review at index: {review_index}, user: {current_user_id}")
+            logger.info(f"💬 Posting reply at index: {review_index}, user: {current_user_id}")
             
-            driver = self._create_driver(headless=True)
+            driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Go to reviews page
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
@@ -1537,12 +1565,15 @@ class NaverPlaceAutomationSelenium:
     
     def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Post a reply to a review in Smartplace Center"""
+        # 🔒 현재 user_id 미리 저장 (race condition 방지)
+        current_user_id = self.active_user_id
+        
         driver = None
         try:
-            print(f"💬 Posting reply to review: {review_id}")
-            logger.info(f"💬 Posting reply to review: {review_id}")
+            print(f"💬 Posting reply to review: {review_id}, user: {current_user_id}")
+            logger.info(f"💬 Posting reply to review: {review_id}, user: {current_user_id}")
             
-            driver = self._create_driver(headless=True)
+            driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Go to Smartplace reviews page (NOT mobile version)
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
