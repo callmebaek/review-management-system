@@ -20,14 +20,6 @@ export default function Login() {
       console.log(`✅ Already logged in as: ${googleEmail}`)
       navigate('/dashboard')
       return
-    } else {
-      // 🗑️ 로그인되지 않았으면 active_naver_user 초기화
-      // (이전 계정의 세션 ID가 남아있는 것 방지)
-      const currentActiveUser = localStorage.getItem('active_naver_user')
-      if (currentActiveUser) {
-        console.log(`🗑️ Clearing stale active_naver_user: ${currentActiveUser}`)
-        localStorage.removeItem('active_naver_user')
-      }
     }
 
     // Handle error from callback
