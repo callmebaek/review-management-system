@@ -886,7 +886,7 @@ async def get_place_ai_settings_endpoint(
 @router.put("/places/{place_id}/ai-settings")
 async def update_place_ai_settings_endpoint(
     place_id: str,
-    settings: dict = Body(...),
+    ai_settings: dict = Body(...),
     google_email: Optional[str] = Header(None, alias="X-Google-Email")
 ):
     """
@@ -896,7 +896,7 @@ async def update_place_ai_settings_endpoint(
     
     Args:
         place_id: Naver place ID
-        settings: AI settings dictionary
+        ai_settings: AI settings dictionary
         google_email: Current user's Google email
     
     Returns:
@@ -905,20 +905,33 @@ async def update_place_ai_settings_endpoint(
     try:
         from utils.db import save_place_ai_settings, get_db
         from models.schemas import PlaceAISettings
+        from config import settings as config_settings
+        
+        print(f"🔍 [PUT /places/{place_id}/ai-settings] Starting...")
+        print(f"📧 Google email: {google_email}")
+        print(f"📝 Received settings: {ai_settings}")
         
         if not google_email:
             raise HTTPException(status_code=401, detail="Google 계정 정보가 필요합니다")
         
         # 🔐 권한 검증: 이 매장에 대한 네이버 세션을 소유하고 있는지 확인
-        if settings.use_mongodb and settings.mongodb_url:
+        if config_settings.use_mongodb and config_settings.mongodb_url:
             db = get_db()
             if db:
                 # Find any naver session that has this google_email and check if it has access to this place
                 # For now, we'll allow any authenticated user (can be enhanced later)
-                pass
+                print(f"✅ MongoDB available, user authenticated")
         
         # Validate settings with Pydantic
-        validated_settings = PlaceAISettings(**settings)
+        try:
+            validated_settings = PlaceAISettings(**ai_settings)
+            print(f"✅ Settings validated: {validated_settings.dict()}")
+        except Exception as validation_error:
+            print(f"❌ Validation error: {validation_error}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"설정 값이 올바르지 않습니다: {str(validation_error)}"
+            )
         
         # Save to database
         success = save_place_ai_settings(place_id, google_email, validated_settings.dict())
@@ -931,7 +944,8 @@ async def update_place_ai_settings_endpoint(
                 "place_id": place_id
             }
         else:
-            raise HTTPException(status_code=500, detail="설정 저장에 실패했습니다")
+            print(f"❌ save_place_ai_settings returned False")
+            raise HTTPException(status_code=500, detail="데이터베이스 저장에 실패했습니다. MongoDB 연결을 확인해주세요.")
             
     except HTTPException:
         raise
@@ -939,7 +953,7 @@ async def update_place_ai_settings_endpoint(
         print(f"❌ Update AI settings error: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to update AI settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"설정 저장 실패: {str(e)}")
 
 
 @router.delete("/places/{place_id}/ai-settings")

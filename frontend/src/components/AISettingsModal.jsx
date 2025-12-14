@@ -43,13 +43,38 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
   const handleSave = async () => {
     try {
       setSaving(true)
-      await apiClient.put(`/api/naver/places/${placeId}/ai-settings`, settings)
+      
+      // Validate required fields
+      if (settings.reply_length_min > settings.reply_length_max) {
+        alert('❌ 최소 길이가 최대 길이보다 클 수 없습니다.')
+        return
+      }
+      
+      console.log('💾 Saving settings:', settings)
+      const response = await apiClient.put(`/api/naver/places/${placeId}/ai-settings`, settings)
+      console.log('✅ Save response:', response.data)
+      
       alert('✅ AI 답글 설정이 저장되었습니다!')
       setIsDefault(false)
       onClose()
     } catch (error) {
       console.error('Failed to save AI settings:', error)
-      alert('❌ 설정 저장에 실패했습니다. 다시 시도해주세요.')
+      
+      // 더 자세한 에러 메시지 표시
+      let errorMessage = '❌ 설정 저장에 실패했습니다.\n\n'
+      
+      if (error.response?.data?.detail) {
+        errorMessage += `원인: ${error.response.data.detail}\n\n`
+      } else if (error.response?.status === 401) {
+        errorMessage += '로그인이 필요합니다.\n\n'
+      } else if (error.response?.status === 500) {
+        errorMessage += '서버 오류가 발생했습니다.\nMongoDB 연결을 확인해주세요.\n\n'
+      } else {
+        errorMessage += `오류: ${error.message}\n\n`
+      }
+      
+      errorMessage += '다시 시도해주세요.'
+      alert(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -75,33 +100,42 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl my-4 sm:my-8 flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white">AI 답글 생성 설정</h2>
-            <p className="text-purple-100 text-sm mt-1">{placeName || `매장 ID: ${placeId}`}</p>
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white truncate">AI 답글 생성 설정</h2>
+            <p className="text-purple-100 text-xs sm:text-sm mt-1">
+              {placeName ? (
+                <>
+                  <span className="font-semibold">{placeName}</span>
+                  <span className="text-purple-200 ml-1 sm:ml-2 hidden sm:inline">(ID: {placeId})</span>
+                </>
+              ) : (
+                <span>매장 ID: {placeId}</span>
+              )}
+            </p>
             {isDefault && (
-              <span className="inline-block mt-2 px-2 py-1 bg-yellow-400 text-yellow-900 text-xs rounded">
+              <span className="inline-block mt-1 sm:mt-2 px-2 py-1 bg-yellow-400 text-yellow-900 text-xs rounded font-medium">
                 기본값 사용 중
               </span>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition"
+            className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-6">
-          <div className="flex space-x-1">
+        <div className="border-b border-gray-200 px-2 sm:px-6 flex-shrink-0 overflow-x-auto">
+          <div className="flex space-x-1 min-w-max">
             <button
               onClick={() => setActiveTab('basic')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
+              className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm border-b-2 transition whitespace-nowrap ${
                 activeTab === 'basic'
                   ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -111,7 +145,7 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
             </button>
             <button
               onClick={() => setActiveTab('advanced')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
+              className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm border-b-2 transition whitespace-nowrap ${
                 activeTab === 'advanced'
                   ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -121,7 +155,7 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
             </button>
             <button
               onClick={() => setActiveTab('custom')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition ${
+              className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm border-b-2 transition whitespace-nowrap ${
                 activeTab === 'custom'
                   ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -132,17 +166,17 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        {/* Content - 스크롤 가능 영역 */}
+        <div className="px-4 sm:px-6 py-4 sm:py-6 overflow-y-auto flex-1">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-8 sm:py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
             </div>
           ) : (
             <>
               {/* Basic Settings Tab */}
               {activeTab === 'basic' && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {/* Friendliness */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -186,46 +220,68 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                   {/* Reply Length */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      답글 길이
+                      답글 길이 <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">최소</label>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          최소 <span className="text-gray-400">(50-450자)</span>
+                        </label>
                         <input
                           type="number"
                           min="50"
                           max="450"
+                          required
                           value={settings.reply_length_min}
-                          onChange={(e) => setSettings({ ...settings, reply_length_min: parseInt(e.target.value) })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 50
+                            setSettings({ ...settings, reply_length_min: Math.max(50, Math.min(450, value)) })
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                            settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
+                          }`}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">최대</label>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          최대 <span className="text-gray-400">(50-450자)</span>
+                        </label>
                         <input
                           type="number"
                           min="50"
                           max="450"
+                          required
                           value={settings.reply_length_max}
-                          onChange={(e) => setSettings({ ...settings, reply_length_max: parseInt(e.target.value) })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 450
+                            setSettings({ ...settings, reply_length_max: Math.max(50, Math.min(450, value)) })
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
+                            settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
+                          }`}
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {settings.reply_length_min}~{settings.reply_length_max}자 범위로 답글이 생성됩니다
-                    </p>
+                    {settings.reply_length_min > settings.reply_length_max ? (
+                      <p className="text-xs text-red-600 mt-1 font-medium">
+                        ⚠️ 최소 길이가 최대 길이보다 클 수 없습니다
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {settings.reply_length_min}~{settings.reply_length_max}자 범위로 답글이 생성됩니다
+                      </p>
+                    )}
                   </div>
 
                   {/* Text Emoticons Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
+                  <div className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0 mr-3">
                       <label className="block text-sm font-medium text-gray-700">
                         텍스트 이모티콘 사용
                       </label>
                       <p className="text-xs text-gray-500 mt-1">^^, ㅎㅎ, :) 등</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                       <input
                         type="checkbox"
                         checked={settings.use_text_emoticons}
@@ -237,14 +293,14 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                   </div>
 
                   {/* Mention Specifics Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
+                  <div className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0 mr-3">
                       <label className="block text-sm font-medium text-gray-700">
                         리뷰 구체 내용 언급
                       </label>
                       <p className="text-xs text-gray-500 mt-1">맛, 분위기, 서비스 등</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                       <input
                         type="checkbox"
                         checked={settings.mention_specifics}
@@ -259,7 +315,7 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
 
               {/* Advanced Settings Tab */}
               {activeTab === 'advanced' && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {/* Diversity */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -289,7 +345,7 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       브랜드 톤
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-3">
                       {[
                         { value: 'warm', label: '따뜻한', emoji: '🤗' },
                         { value: 'professional', label: '전문적인', emoji: '💼' },
@@ -299,14 +355,14 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                         <button
                           key={option.value}
                           onClick={() => setSettings({ ...settings, brand_voice: option.value })}
-                          className={`p-3 border-2 rounded-lg transition ${
+                          className={`p-2 sm:p-3 border-2 rounded-lg transition ${
                             settings.brand_voice === option.value
                               ? 'border-purple-600 bg-purple-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
-                          <div className="text-2xl mb-1">{option.emoji}</div>
-                          <div className="text-sm font-medium">{option.label}</div>
+                          <div className="text-xl sm:text-2xl mb-1">{option.emoji}</div>
+                          <div className="text-xs sm:text-sm font-medium">{option.label}</div>
                         </button>
                       ))}
                     </div>
@@ -325,7 +381,7 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                       ].map((option) => (
                         <label
                           key={option.value}
-                          className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${
+                          className={`flex items-start sm:items-center p-2.5 sm:p-3 border-2 rounded-lg cursor-pointer transition ${
                             settings.response_style === option.value
                               ? 'border-purple-600 bg-purple-50'
                               : 'border-gray-200 hover:border-gray-300'
@@ -337,11 +393,11 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                             value={option.value}
                             checked={settings.response_style === option.value}
                             onChange={(e) => setSettings({ ...settings, response_style: e.target.value })}
-                            className="mr-3 text-purple-600 focus:ring-purple-500"
+                            className="mr-2 sm:mr-3 mt-0.5 sm:mt-0 text-purple-600 focus:ring-purple-500 flex-shrink-0"
                           />
-                          <div>
-                            <div className="font-medium text-sm">{option.label}</div>
-                            <div className="text-xs text-gray-500">{option.desc}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-xs sm:text-sm">{option.label}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{option.desc}</div>
                           </div>
                         </label>
                       ))}
@@ -360,8 +416,9 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                     value={settings.custom_instructions}
                     onChange={(e) => setSettings({ ...settings, custom_instructions: e.target.value })}
                     placeholder="예시:&#10;- 우리 매장은 사진관이므로 '추억', '순간' 같은 감성적인 단어를 사용해주세요&#10;- 가족 단위 고객이 많으므로 따뜻한 톤을 유지해주세요&#10;- 주차 관련 언급 시 '주차 공간이 협소하지만 최선을 다하고 있다'고 안내해주세요"
-                    rows="10"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    rows="8"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
+                    style={{ minHeight: '200px' }}
                   />
                   <p className="text-xs text-gray-500 mt-2">
                     💡 매장만의 특별한 요청사항을 자유롭게 작성하세요. AI가 이를 반영하여 답글을 생성합니다.
@@ -372,30 +429,36 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between bg-gray-50">
-          <button
-            onClick={handleReset}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>기본값으로 되돌리기</span>
-          </button>
-          <div className="flex items-center space-x-3">
+        {/* Footer - 항상 보이는 버튼 영역 */}
+        <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 flex-shrink-0">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0">
+            {/* 기본값으로 되돌리기 - 모바일에서는 작게 */}
             <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
+              onClick={handleReset}
+              className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 text-gray-600 hover:text-gray-800 transition text-sm"
             >
-              취소
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">기본값으로 되돌리기</span>
+              <span className="sm:hidden">기본값</span>
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center space-x-2 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Save className="w-4 h-4" />
-              <span>{saving ? '저장 중...' : '저장'}</span>
-            </button>
+            
+            {/* 취소/저장 버튼 */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 sm:flex-none px-4 py-2 text-gray-600 hover:text-gray-800 transition font-medium text-sm"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || settings.reply_length_min > settings.reply_length_max}
+                className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+              >
+                <Save className="w-4 h-4" />
+                <span>{saving ? '저장 중...' : '저장'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
