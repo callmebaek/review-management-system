@@ -39,6 +39,8 @@ allowed_origins = [
     "http://localhost:5174",  # Added for when port 5173 is busy
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
+    # 🔥 Vercel 프로덕션 도메인 명시적 추가
+    "https://review-management-system-ivory.vercel.app",
 ]
 
 # 프로덕션 환경의 프론트엔드 URL 추가
@@ -53,8 +55,7 @@ if os.getenv("VERCEL_URL"):
     allowed_origins.append(vercel_url)
     print(f"✅ CORS: Vercel URL 추가 - {vercel_url}")
 
-# 모든 Vercel 프리뷰 배포 허용 (선택사항)
-allowed_origins.append("https://*.vercel.app")
+print(f"🌐 CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +63,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 🔥 Vercel 와일드카드 지원 (regex 패턴)
+    allow_origin_regex=r"https://.*\.vercel\.app$"
 )
 
 
