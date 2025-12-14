@@ -77,6 +77,7 @@ async def health_check():
     # Debug: Return actual values
     return {
         "status": "healthy",
+        "version": "2.0.0",  # 🔥 버전 업데이트 (배포 확인용)
         "gbp_configured": bool(settings.google_client_id and settings.google_client_secret),
         "openai_configured": bool(settings.openai_api_key),
         "debug": {
