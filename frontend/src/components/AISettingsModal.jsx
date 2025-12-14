@@ -14,7 +14,8 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
     mention_specifics: true,
     brand_voice: 'warm',
     response_style: 'quick_thanks',
-    custom_instructions: ''
+    custom_instructions: '',
+    custom_instructions_negative: ''
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,6 +48,16 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
       // Validate required fields
       if (settings.reply_length_min > settings.reply_length_max) {
         alert('❌ 최소 길이가 최대 길이보다 클 수 없습니다.')
+        return
+      }
+      
+      if (settings.reply_length_min < 50 || settings.reply_length_min > 1200) {
+        alert('❌ 최소 길이는 50~1200자 사이여야 합니다.')
+        return
+      }
+      
+      if (settings.reply_length_max < 50 || settings.reply_length_max > 1200) {
+        alert('❌ 최대 길이는 50~1200자 사이여야 합니다.')
         return
       }
       
@@ -92,7 +103,8 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
         mention_specifics: true,
         brand_voice: 'warm',
         response_style: 'quick_thanks',
-        custom_instructions: ''
+        custom_instructions: '',
+        custom_instructions_negative: ''
       })
     }
   }
@@ -161,7 +173,17 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              추가 요청사항
+              일반 요청사항
+            </button>
+            <button
+              onClick={() => setActiveTab('negative')}
+              className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm border-b-2 transition whitespace-nowrap ${
+                activeTab === 'negative'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              부정 리뷰 대응
             </button>
           </div>
         </div>
@@ -225,40 +247,60 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs text-gray-600 mb-1">
-                          최소 <span className="text-gray-400">(50-450자)</span>
+                          최소 <span className="text-gray-400">(50-1200자)</span>
                         </label>
                         <input
                           type="number"
                           min="50"
-                          max="450"
+                          max="1200"
+                          step="10"
                           required
                           value={settings.reply_length_min}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value) || 50
-                            setSettings({ ...settings, reply_length_min: Math.max(50, Math.min(450, value)) })
+                            const value = parseInt(e.target.value)
+                            if (!isNaN(value)) {
+                              setSettings({ ...settings, reply_length_min: Math.max(50, Math.min(1200, value)) })
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // 입력이 비어있으면 기본값 설정
+                            if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
+                              setSettings({ ...settings, reply_length_min: 50 })
+                            }
                           }}
                           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
                             settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
                           }`}
+                          placeholder="50"
                         />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-600 mb-1">
-                          최대 <span className="text-gray-400">(50-450자)</span>
+                          최대 <span className="text-gray-400">(50-1200자)</span>
                         </label>
                         <input
                           type="number"
                           min="50"
-                          max="450"
+                          max="1200"
+                          step="10"
                           required
                           value={settings.reply_length_max}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value) || 450
-                            setSettings({ ...settings, reply_length_max: Math.max(50, Math.min(450, value)) })
+                            const value = parseInt(e.target.value)
+                            if (!isNaN(value)) {
+                              setSettings({ ...settings, reply_length_max: Math.max(50, Math.min(1200, value)) })
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // 입력이 비어있으면 기본값 설정
+                            if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
+                              setSettings({ ...settings, reply_length_max: 1200 })
+                            }
                           }}
                           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
                             settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
                           }`}
+                          placeholder="1200"
                         />
                       </div>
                     </div>
@@ -406,22 +448,42 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                 </div>
               )}
 
-              {/* Custom Instructions Tab */}
+              {/* Custom Instructions Tab - 일반 */}
               {activeTab === 'custom' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    매장 특성 및 추가 요청사항
+                    일반 리뷰 답글 추가 요청사항
                   </label>
                   <textarea
                     value={settings.custom_instructions}
                     onChange={(e) => setSettings({ ...settings, custom_instructions: e.target.value })}
-                    placeholder="예시:&#10;- 우리 매장은 사진관이므로 '추억', '순간' 같은 감성적인 단어를 사용해주세요&#10;- 가족 단위 고객이 많으므로 따뜻한 톤을 유지해주세요&#10;- 주차 관련 언급 시 '주차 공간이 협소하지만 최선을 다하고 있다'고 안내해주세요"
+                    placeholder="예시:&#10;- 우리 매장은 사진관이므로 '추억', '순간' 같은 감성적인 단어를 사용해주세요&#10;- 가족 단위 고객이 많으므로 따뜻한 톤을 유지해주세요&#10;- 재방문 시 할인 쿠폰이 있다고 안내해주세요"
                     rows="8"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
                     style={{ minHeight: '200px' }}
                   />
                   <p className="text-xs text-gray-500 mt-2">
-                    💡 매장만의 특별한 요청사항을 자유롭게 작성하세요. AI가 이를 반영하여 답글을 생성합니다.
+                    💡 일반적인 리뷰(긍정/중립)에 대한 답글 작성 시 반영할 내용을 작성하세요.
+                  </p>
+                </div>
+              )}
+
+              {/* Custom Instructions Tab - 부정 리뷰 */}
+              {activeTab === 'negative' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    부정 리뷰 답글 추가 요청사항
+                  </label>
+                  <textarea
+                    value={settings.custom_instructions_negative}
+                    onChange={(e) => setSettings({ ...settings, custom_instructions_negative: e.target.value })}
+                    placeholder="예시:&#10;- 구체적인 불편 사항에 대해 진심으로 사과하고 개선 의지를 표현해주세요&#10;- 직접 연락 가능한 채널(전화번호, 카카오톡)을 안내해주세요&#10;- 보상이나 재방문 혜택을 제안해주세요&#10;- 과도한 변명보다는 공감과 해결 의지를 우선해주세요"
+                    rows="8"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
+                    style={{ minHeight: '200px' }}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    🔥 부정적인 리뷰(1-2점)에 대한 답글 작성 시 반영할 내용을 작성하세요. 더 신중하고 진정성 있는 대응이 필요합니다.
                   </p>
                 </div>
               )}

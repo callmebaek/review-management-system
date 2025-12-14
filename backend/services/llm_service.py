@@ -143,9 +143,48 @@ class LLMService:
 - {specifics_instruction}"""
         
         if place_settings.custom_instructions:
-            system_prompt += f"\n\n[매장 특별 요청사항]\n{place_settings.custom_instructions}"
+            system_prompt += f"\n\n[매장 특별 요청사항 - 일반]\n{place_settings.custom_instructions}"
         
         return system_prompt
+    
+    def _build_custom_system_prompt_negative(self, place_settings) -> str:
+        """
+        Build customized system prompt for negative reviews (1-2 stars)
+        
+        Args:
+            place_settings: PlaceAISettings object with custom configurations
+        
+        Returns:
+            Customized system prompt string for negative reviews
+        """
+        # Start with base prompt
+        base_prompt = self._build_custom_system_prompt(place_settings)
+        
+        # Add negative review specific instructions
+        negative_instructions = """
+
+[부정 리뷰 특별 대응 지침]
+⚠️ 이 리뷰는 부정적입니다. 다음 원칙을 반드시 지켜주세요:
+
+1. 진심 어린 사과: 고객의 불편함에 대해 먼저 진심으로 사과
+2. 구체적 공감: 리뷰에 언급된 불편 사항을 구체적으로 언급하며 공감
+3. 개선 약속: 문제 해결을 위한 구체적인 개선 의지 표현
+4. 직접 소통 제안: 가능하면 직접 대화할 수 있는 채널 안내 (변명 X)
+5. 보상/재방문 기회: 적절한 경우 재방문 혜택이나 보상 언급
+
+❌ 금지사항:
+- 고객 탓하기, 변명하기
+- 일반적인 사과만 나열
+- 너무 짧은 답글 (최소한 성의 있게)
+- 과도한 긍정적 표현 (부정 리뷰에는 진중함 필요)"""
+        
+        result = base_prompt + negative_instructions
+        
+        # Add negative-specific custom instructions if provided
+        if place_settings.custom_instructions_negative:
+            result += f"\n\n[매장 특별 요청사항 - 부정 리뷰]\n{place_settings.custom_instructions_negative}"
+        
+        return result
     
     def generate_reply(self, request: GenerateReplyRequest, place_settings=None) -> GenerateReplyResponse:
         """
@@ -168,9 +207,16 @@ class LLMService:
             if place_settings:
                 temperature = place_settings.diversity
                 max_tokens = int(place_settings.reply_length_max * 1.5)  # 여유를 두고 설정
-                system_prompt = self._build_custom_system_prompt(place_settings)
                 min_length = place_settings.reply_length_min
                 max_length = place_settings.reply_length_max
+                
+                # 🔥 부정 리뷰 (1-2점)는 특별 프롬프트 사용
+                if request.rating and request.rating <= 2:
+                    system_prompt = self._build_custom_system_prompt_negative(place_settings)
+                    print(f"🔥 Using NEGATIVE review prompt for rating {request.rating}")
+                else:
+                    system_prompt = self._build_custom_system_prompt(place_settings)
+                    print(f"✅ Using normal review prompt for rating {request.rating}")
             else:
                 # Default values
                 temperature = 0.9
