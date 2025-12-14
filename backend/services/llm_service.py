@@ -104,43 +104,101 @@ class LLMService:
         Returns:
             Customized system prompt string
         """
-        # Map numeric values to descriptive terms
-        friendliness_level = "매우 친절하고 따뜻한" if place_settings.friendliness >= 8 else "친절한" if place_settings.friendliness >= 5 else "전문적이고 정중한"
-        
-        formality_desc = ""
-        if place_settings.formality >= 8:
-            formality_desc = "격식있는 존댓말을 사용하며, 공손하고 품위있게"
-        elif place_settings.formality >= 5:
-            formality_desc = "자연스러운 존댓말을 사용하며"
+        # 🔥 더 구체적이고 차별화된 친절함 수준
+        if place_settings.friendliness >= 9:
+            friendliness_level = "극도로 열정적이고 감동적인"
+            friendliness_detail = "고객을 매우 특별하게 대우하고, 과도할 정도로 긍정적이며, 감탄사와 감사 표현을 풍부하게 사용한다."
+        elif place_settings.friendliness >= 7:
+            friendliness_level = "매우 따뜻하고 친절한"
+            friendliness_detail = "고객에게 진심 어린 감사를 전하고, 개인적인 느낌을 주며, 따뜻한 표현을 자주 사용한다."
+        elif place_settings.friendliness >= 5:
+            friendliness_level = "적절히 친절한"
+            friendliness_detail = "기본적인 예의를 갖추고 정중하게 대하되, 과하지 않게 감사를 표현한다."
+        elif place_settings.friendliness >= 3:
+            friendliness_level = "간결하고 사무적인"
+            friendliness_detail = "필요한 내용만 간단히 전달하고, 감사 표현을 최소화하며, 효율적으로 작성한다."
         else:
-            formality_desc = "편안한 반말체를 사용하며 친근하게"
+            friendliness_level = "매우 간결하고 형식적인"
+            friendliness_detail = "사무적이고 건조하게, 감정 표현 없이 필수 내용만 전달한다."
         
-        emoticon_instruction = "텍스트 이모티콘(^^, ㅎㅎ, :) 등)을 적절히 사용하여 친근함을 표현한다." if place_settings.use_text_emoticons else "이모티콘 없이 텍스트만으로 표현한다."
+        # 🔥 더 명확한 격식 수준
+        if place_settings.formality >= 9:
+            formality_desc = "매우 격식있는 존댓말 사용 (예: ~입니다, ~하겠습니다, ~주시기 바랍니다)"
+            formality_example = "예: '소중한 말씀 감사드립니다', '최선을 다하겠습니다'"
+        elif place_settings.formality >= 7:
+            formality_desc = "정중한 존댓말 사용 (예: ~해요, ~드려요, ~주세요)"
+            formality_example = "예: '감사해요', '노력할게요', '방문해주세요'"
+        elif place_settings.formality >= 5:
+            formality_desc = "편안한 존댓말 사용 (예: ~요 체)"
+            formality_example = "예: '고마워요', '좋았어요', '또 와요'"
+        elif place_settings.formality >= 3:
+            formality_desc = "친근한 반말 사용 (예: ~어, ~지, ~네)"
+            formality_example = "예: '고마워', '좋았어', '또 와'"
+        else:
+            formality_desc = "매우 캐주얼한 반말 사용"
+            formality_example = "예: '감사~', '굿!', '또 봐'"
         
-        specifics_instruction = "리뷰에서 언급된 구체적인 내용(맛, 분위기, 서비스 등)을 반드시 답글에 포함시킨다." if place_settings.mention_specifics else "전반적인 감사 인사 위주로 작성한다."
+        # 🔥 이모티콘 사용 빈도
+        if place_settings.use_text_emoticons:
+            emoticon_instruction = "텍스트 이모티콘(^^, ㅎㅎ, :) 등)을 적극적으로 사용하여 친근함을 표현한다. (문장당 1-2개 정도)"
+        else:
+            emoticon_instruction = "이모티콘을 절대 사용하지 않고 텍스트만으로 표현한다."
         
-        brand_voice_desc = {
-            "warm": "따뜻하고 감성적인",
-            "professional": "전문적이고 신뢰감 있는",
-            "casual": "캐주얼하고 편안한",
-            "friendly": "친근하고 활기찬"
-        }.get(place_settings.brand_voice, "따뜻한")
+        # 🔥 구체성 지시
+        if place_settings.mention_specifics:
+            specifics_instruction = "리뷰에서 언급된 구체적인 내용(맛, 분위기, 서비스, 직원, 메뉴 등)을 반드시 1-2가지 이상 답글에 언급한다."
+        else:
+            specifics_instruction = "구체적인 내용보다는 전반적이고 일반적인 감사 인사 위주로 작성한다."
         
-        response_style_desc = {
-            "quick_thanks": "신속한 감사 표현 중심",
-            "empathy": "공감과 이해 중심",
-            "solution": "문제 해결과 개선 의지 표현 중심"
-        }.get(place_settings.response_style, "감사 중심")
+        # 🔥 브랜드 보이스 상세화
+        brand_voice_map = {
+            "warm": ("따뜻하고 감성적인", "고객의 감정에 공감하고, '감동', '기쁨', '행복' 같은 감성 단어를 사용"),
+            "professional": ("전문적이고 신뢰감 있는", "정확하고 명확한 표현을 사용하며, 전문성과 책임감을 강조"),
+            "casual": ("캐주얼하고 편안한", "일상적이고 자연스러운 표현을 사용하며, 부담 없는 분위기 조성"),
+            "friendly": ("친근하고 활기찬", "밝고 에너지 넘치는 표현을 사용하며, 친구같은 느낌")
+        }
+        brand_voice_desc, brand_voice_detail = brand_voice_map.get(place_settings.brand_voice, ("따뜻한", "고객에게 따뜻하게 대응"))
+        
+        # 🔥 응답 스타일 상세화
+        response_style_map = {
+            "quick_thanks": ("신속한 감사 표현", "먼저 감사를 표현하고 간단히 마무리. 짧고 명확하게."),
+            "empathy": ("공감과 이해", "고객의 경험과 감정에 깊이 공감하고, '~하셨군요', '~하셨다니' 같은 표현 사용"),
+            "solution": ("해결책 제시", "개선 의지와 구체적인 노력을 강조하며, '~하겠습니다', '~할게요' 같은 약속 표현")
+        }
+        response_style_desc, response_style_detail = response_style_map.get(place_settings.response_style, ("감사", "감사 표현"))
         
         system_prompt = f"""[ROLE]
 너는 네이버 플레이스 리뷰에 답글을 다는 "매장 CS 담당자"다. 리뷰를 정확히 읽고 이해한 뒤, {friendliness_level} 톤으로 답글을 작성한다.
 
-[TONE & STYLE]
-- {formality_desc} 답글을 작성한다
-- {brand_voice_desc} 브랜드 보이스를 유지한다
-- {response_style_desc}으로 답글을 작성한다
-- {emoticon_instruction}
-- {specifics_instruction}"""
+[TONE & STYLE - 매우 중요!]
+친절함 수준 ({place_settings.friendliness}/10): {friendliness_level}
+→ {friendliness_detail}
+
+격식 수준 ({place_settings.formality}/10): {formality_desc}
+→ {formality_example}
+
+브랜드 보이스: {brand_voice_desc}
+→ {brand_voice_detail}
+
+응답 스타일: {response_style_desc}
+→ {response_style_detail}
+
+이모티콘: {emoticon_instruction}
+
+구체성: {specifics_instruction}
+
+🔥 위 설정값들을 정확히 반영하여 답글의 톤, 어투, 길이, 내용이 명확히 달라져야 한다!
+
+[실제 적용 예시]
+친절함 1-3 (사무적): "방문 감사합니다. 의견 전달드리겠습니다."
+친절함 7-8 (따뜻): "와주셔서 정말 반가웠어요^^ 좋은 말씀 너무 감사드려요!"
+친절함 9-10 (열정): "정말정말 감사합니다!! 이렇게 좋은 리뷰를 남겨주시다니 저희에게는 최고의 선물이에요!!"
+
+격식 1-3 (반말): "고마워! 또 와~"
+격식 5-7 (존댓말): "감사해요! 또 방문해주세요^^"
+격식 9-10 (격식): "진심으로 감사드립니다. 다음에도 방문해주시기 바랍니다."
+
+🔥 설정값에 따라 위처럼 극명한 차이가 나야 한다!"""
         
         if place_settings.custom_instructions:
             system_prompt += f"\n\n[매장 특별 요청사항 - 일반]\n{place_settings.custom_instructions}"
@@ -210,6 +268,15 @@ class LLMService:
                 min_length = place_settings.reply_length_min
                 max_length = place_settings.reply_length_max
                 
+                # 🔥 다양성에 따라 penalty 조정
+                # 다양성이 높을수록 더 창의적이고 반복 회피
+                frequency_penalty = 0.5 + (place_settings.diversity * 0.4)  # 0.7-0.9
+                presence_penalty = 0.3 + (place_settings.diversity * 0.4)   # 0.5-0.7
+                
+                print(f"🎨 AI Parameters: temp={temperature}, freq_penalty={frequency_penalty:.2f}, presence_penalty={presence_penalty:.2f}")
+                print(f"📏 Length range: {min_length}-{max_length}, max_tokens={max_tokens}")
+                print(f"🎭 Settings: friendliness={place_settings.friendliness}, formality={place_settings.formality}")
+                
                 # 🔥 부정 리뷰 (1-2점)는 특별 프롬프트 사용
                 if request.rating and request.rating <= 2:
                     system_prompt = self._build_custom_system_prompt_negative(place_settings)
@@ -223,6 +290,11 @@ class LLMService:
                 max_tokens = 500
                 min_length = 100
                 max_length = 450
+                frequency_penalty = 0.8
+                presence_penalty = 0.6
+                
+                print(f"🎨 Using DEFAULT AI parameters")
+                
                 # Build default system prompt
                 system_prompt = """[ROLE]
 너는 네이버 플레이스 리뷰에 답글을 다는 "매장 CS 담당자"다. 리뷰를 정확히 읽고 이해한 뒤, 항상 친절하고 긍정적인 톤으로 답글을 작성한다.
@@ -347,8 +419,8 @@ class LLMService:
                 ],
                 temperature=temperature,  # Customizable diversity
                 max_tokens=max_tokens,  # Customizable length
-                frequency_penalty=0.8,  # 🔥 반복 패턴 강력 억제
-                presence_penalty=0.6   # 🔥 새로운 표현 장려
+                frequency_penalty=frequency_penalty,  # 반복 패턴 억제 (설정 기반)
+                presence_penalty=presence_penalty   # 새로운 표현 장려 (설정 기반)
             )
             
             generated_reply = response.choices[0].message.content.strip()

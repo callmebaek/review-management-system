@@ -46,23 +46,33 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
       setSaving(true)
       
       // Validate required fields
-      if (settings.reply_length_min > settings.reply_length_max) {
+      const minLength = typeof settings.reply_length_min === 'number' ? settings.reply_length_min : parseInt(settings.reply_length_min) || 50
+      const maxLength = typeof settings.reply_length_max === 'number' ? settings.reply_length_max : parseInt(settings.reply_length_max) || 1200
+      
+      if (minLength > maxLength) {
         alert('❌ 최소 길이가 최대 길이보다 클 수 없습니다.')
         return
       }
       
-      if (settings.reply_length_min < 50 || settings.reply_length_min > 1200) {
+      if (minLength < 50 || minLength > 1200) {
         alert('❌ 최소 길이는 50~1200자 사이여야 합니다.')
         return
       }
       
-      if (settings.reply_length_max < 50 || settings.reply_length_max > 1200) {
+      if (maxLength < 50 || maxLength > 1200) {
         alert('❌ 최대 길이는 50~1200자 사이여야 합니다.')
         return
       }
       
-      console.log('💾 Saving settings:', settings)
-      const response = await apiClient.put(`/api/naver/places/${placeId}/ai-settings`, settings)
+      // 실제 숫자 값으로 변환하여 저장
+      const validatedSettings = {
+        ...settings,
+        reply_length_min: minLength,
+        reply_length_max: maxLength
+      }
+      
+      console.log('💾 Saving settings:', validatedSettings)
+      const response = await apiClient.put(`/api/naver/places/${placeId}/ai-settings`, validatedSettings)
       console.log('✅ Save response:', response.data)
       
       alert('✅ AI 답글 설정이 저장되었습니다!')
@@ -257,19 +267,24 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                           required
                           value={settings.reply_length_min}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value)
-                            if (!isNaN(value)) {
-                              setSettings({ ...settings, reply_length_min: Math.max(50, Math.min(1200, value)) })
+                            // onChange에서는 범위 제한 없이 자유롭게 입력 가능
+                            const value = e.target.value
+                            if (value === '' || !isNaN(parseInt(value))) {
+                              setSettings({ ...settings, reply_length_min: value === '' ? '' : parseInt(value) })
                             }
                           }}
                           onBlur={(e) => {
-                            // 입력이 비어있으면 기본값 설정
-                            if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
-                              setSettings({ ...settings, reply_length_min: 50 })
+                            // 포커스 아웃 시에만 범위 제한 적용
+                            let value = parseInt(e.target.value)
+                            if (isNaN(value) || value < 50) {
+                              value = 50
+                            } else if (value > 1200) {
+                              value = 1200
                             }
+                            setSettings({ ...settings, reply_length_min: value })
                           }}
                           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                            settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
+                            (parseInt(settings.reply_length_min) || 0) > (parseInt(settings.reply_length_max) || 9999) ? 'border-red-500' : 'border-gray-300'
                           }`}
                           placeholder="50"
                         />
@@ -286,33 +301,45 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
                           required
                           value={settings.reply_length_max}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value)
-                            if (!isNaN(value)) {
-                              setSettings({ ...settings, reply_length_max: Math.max(50, Math.min(1200, value)) })
+                            // onChange에서는 범위 제한 없이 자유롭게 입력 가능
+                            const value = e.target.value
+                            if (value === '' || !isNaN(parseInt(value))) {
+                              setSettings({ ...settings, reply_length_max: value === '' ? '' : parseInt(value) })
                             }
                           }}
                           onBlur={(e) => {
-                            // 입력이 비어있으면 기본값 설정
-                            if (e.target.value === '' || isNaN(parseInt(e.target.value))) {
-                              setSettings({ ...settings, reply_length_max: 1200 })
+                            // 포커스 아웃 시에만 범위 제한 적용
+                            let value = parseInt(e.target.value)
+                            if (isNaN(value) || value < 50) {
+                              value = 50
+                            } else if (value > 1200) {
+                              value = 1200
                             }
+                            setSettings({ ...settings, reply_length_max: value })
                           }}
                           className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent ${
-                            settings.reply_length_min > settings.reply_length_max ? 'border-red-500' : 'border-gray-300'
+                            (parseInt(settings.reply_length_min) || 0) > (parseInt(settings.reply_length_max) || 9999) ? 'border-red-500' : 'border-gray-300'
                           }`}
                           placeholder="1200"
                         />
                       </div>
                     </div>
-                    {settings.reply_length_min > settings.reply_length_max ? (
-                      <p className="text-xs text-red-600 mt-1 font-medium">
-                        ⚠️ 최소 길이가 최대 길이보다 클 수 없습니다
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {settings.reply_length_min}~{settings.reply_length_max}자 범위로 답글이 생성됩니다
-                      </p>
-                    )}
+                    {(() => {
+                      const min = parseInt(settings.reply_length_min) || 0
+                      const max = parseInt(settings.reply_length_max) || 0
+                      if (min > 0 && max > 0 && min > max) {
+                        return (
+                          <p className="text-xs text-red-600 mt-1 font-medium">
+                            ⚠️ 최소 길이가 최대 길이보다 클 수 없습니다
+                          </p>
+                        )
+                      }
+                      return (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {settings.reply_length_min || 50}~{settings.reply_length_max || 1200}자 범위로 답글이 생성됩니다
+                        </p>
+                      )
+                    })()}
                   </div>
 
                   {/* Text Emoticons Toggle */}
@@ -512,14 +539,14 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
               >
                 취소
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || settings.reply_length_min > settings.reply_length_max}
-                className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-              >
-                <Save className="w-4 h-4" />
-                <span>{saving ? '저장 중...' : '저장'}</span>
-              </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+            >
+              <Save className="w-4 h-4" />
+              <span>{saving ? '저장 중...' : '저장'}</span>
+            </button>
             </div>
           </div>
         </div>
