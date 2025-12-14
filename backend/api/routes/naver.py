@@ -917,7 +917,7 @@ async def update_place_ai_settings_endpoint(
         # 🔐 권한 검증: 이 매장에 대한 네이버 세션을 소유하고 있는지 확인
         if config_settings.use_mongodb and config_settings.mongodb_url:
             db = get_db()
-            if db:
+            if db is not None:
                 # Find any naver session that has this google_email and check if it has access to this place
                 # For now, we'll allow any authenticated user (can be enhanced later)
                 print(f"✅ MongoDB available, user authenticated")
