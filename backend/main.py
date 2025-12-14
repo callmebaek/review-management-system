@@ -32,28 +32,23 @@ else:
     print("ℹ️ MongoDB 사용 안 함. 파일 기반 저장소 사용.")
 
 # CORS configuration
-# 프로덕션과 로컬 모두 지원
+# 🔥 Vercel 도메인 명시적 허용
 allowed_origins = [
+    # Local development
     f"http://localhost:{settings.frontend_port}",
     "http://localhost:5173",
-    "http://localhost:5174",  # Added for when port 5173 is busy
+    "http://localhost:5174",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
-    # 🔥 Vercel 프로덕션 도메인 명시적 추가
+    # Production (Vercel)
     "https://review-management-system-ivory.vercel.app",
 ]
 
-# 프로덕션 환경의 프론트엔드 URL 추가
+# 환경 변수로 추가 도메인 지원
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
     allowed_origins.append(frontend_url)
-    print(f"✅ CORS: 프로덕션 프론트엔드 추가 - {frontend_url}")
-
-# Vercel 자동 배포 URL 패턴 지원
-if os.getenv("VERCEL_URL"):
-    vercel_url = f"https://{os.getenv('VERCEL_URL')}"
-    allowed_origins.append(vercel_url)
-    print(f"✅ CORS: Vercel URL 추가 - {vercel_url}")
+    print(f"✅ CORS: Added FRONTEND_URL - {frontend_url}")
 
 print(f"🌐 CORS allowed origins: {allowed_origins}")
 
@@ -61,10 +56,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
-    # 🔥 Vercel 와일드카드 지원 (regex 패턴)
-    allow_origin_regex=r"https://.*\.vercel\.app$"
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 
