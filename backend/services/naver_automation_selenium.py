@@ -1151,6 +1151,70 @@ class NaverPlaceAutomationSelenium:
             except:
                 pass
             
+            # 🚀 NEW: 답글 필터를 "미등록"으로 설정하여 스크롤 최소화!
+            try:
+                print("🎯 Applying '미등록' filter to reduce scrolling...")
+                
+                # 방법 1: "답글여부" 드롭다운 찾기 (텍스트로)
+                # 모든 select, button 요소 확인
+                filter_applied = False
+                
+                # 시도 1: select 태그로 찾기
+                try:
+                    selects = driver.find_elements(By.TAG_NAME, "select")
+                    for select_elem in selects:
+                        if "답글" in select_elem.text or select_elem.get_attribute("aria-label") and "답글" in select_elem.get_attribute("aria-label"):
+                            # 미등록 옵션 선택
+                            from selenium.webdriver.support.ui import Select
+                            select = Select(select_elem)
+                            for option in select.options:
+                                if "미등록" in option.text:
+                                    option.click()
+                                    filter_applied = True
+                                    print("  ✅ '미등록' filter applied via select!")
+                                    time.sleep(2)  # 필터 적용 대기
+                                    break
+                            if filter_applied:
+                                break
+                except Exception as e:
+                    print(f"  ⚠️ Select method failed: {e}")
+                
+                # 시도 2: 버튼/div 클릭 방식 (드롭다운)
+                if not filter_applied:
+                    try:
+                        # "답글여부" 또는 "전체"라는 텍스트가 있는 버튼 찾기
+                        buttons = driver.find_elements(By.TAG_NAME, "button")
+                        buttons.extend(driver.find_elements(By.CSS_SELECTOR, "div[role='button']"))
+                        
+                        for btn in buttons:
+                            btn_text = btn.text.strip()
+                            if "전체" in btn_text or "답글" in btn_text:
+                                # 드롭다운 열기
+                                driver.execute_script("arguments[0].click();", btn)
+                                time.sleep(0.5)
+                                
+                                # "미등록" 옵션 찾기
+                                time.sleep(0.3)
+                                all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '미등록')]")
+                                for elem in all_elements:
+                                    if elem.text.strip() == "미등록":
+                                        driver.execute_script("arguments[0].click();", elem)
+                                        filter_applied = True
+                                        print("  ✅ '미등록' filter applied via dropdown!")
+                                        time.sleep(2)  # 필터 적용 및 리뷰 재로딩 대기
+                                        break
+                                if filter_applied:
+                                    break
+                    except Exception as e:
+                        print(f"  ⚠️ Dropdown method failed: {e}")
+                
+                if not filter_applied:
+                    print("  ℹ️ Could not apply '미등록' filter - continuing with all reviews")
+                    
+            except Exception as filter_error:
+                print(f"  ⚠️ Filter application error (non-critical): {filter_error}")
+                print("  ℹ️ Continuing without filter...")
+            
             # 🚀 점진적 로딩 전략: 10개씩 렌더링하면서 찾기 (속도 향상!)
             print(f"🚀 Progressive loading: Searching in chunks of 10 reviews...")
             print(f"🎯 Target: author='{author[:3]}...', date='{date}'")
