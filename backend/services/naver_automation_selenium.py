@@ -1152,68 +1152,63 @@ class NaverPlaceAutomationSelenium:
                 pass
             
             # 🚀 NEW: 답글 필터를 "미등록"으로 설정하여 스크롤 최소화!
+            # 🔧 최적화: 빠르게 시도하고 실패하면 포기 (전체 플로우에 영향 최소화)
             try:
-                print("🎯 Applying '미등록' filter to reduce scrolling...")
-                
-                # 방법 1: "답글여부" 드롭다운 찾기 (텍스트로)
-                # 모든 select, button 요소 확인
+                print("🎯 Attempting '미등록' filter (fast mode)...")
                 filter_applied = False
                 
-                # 시도 1: select 태그로 찾기
+                # 시도 1: select 태그 (가장 빠름)
                 try:
-                    selects = driver.find_elements(By.TAG_NAME, "select")
+                    # 짧은 타임아웃으로 빠르게 확인
+                    selects = WebDriverWait(driver, 2).until(
+                        EC.presence_of_all_elements_located((By.TAG_NAME, "select"))
+                    )
                     for select_elem in selects:
-                        if "답글" in select_elem.text or select_elem.get_attribute("aria-label") and "답글" in select_elem.get_attribute("aria-label"):
-                            # 미등록 옵션 선택
+                        if "답글" in select_elem.text:
                             from selenium.webdriver.support.ui import Select
                             select = Select(select_elem)
                             for option in select.options:
                                 if "미등록" in option.text:
                                     option.click()
                                     filter_applied = True
-                                    print("  ✅ '미등록' filter applied via select!")
-                                    time.sleep(2)  # 필터 적용 대기
+                                    print("  ✅ '미등록' filter applied!")
+                                    time.sleep(1.5)  # 필터 적용 대기
                                     break
                             if filter_applied:
                                 break
-                except Exception as e:
-                    print(f"  ⚠️ Select method failed: {e}")
+                except:
+                    pass  # 빠르게 실패
                 
-                # 시도 2: 버튼/div 클릭 방식 (드롭다운)
+                # 시도 2: 드롭다운 버튼 (더 느림, select 실패 시만)
                 if not filter_applied:
                     try:
-                        # "답글여부" 또는 "전체"라는 텍스트가 있는 버튼 찾기
-                        buttons = driver.find_elements(By.TAG_NAME, "button")
-                        buttons.extend(driver.find_elements(By.CSS_SELECTOR, "div[role='button']"))
+                        # 최대 3초만 시도
+                        buttons = WebDriverWait(driver, 1).until(
+                            EC.presence_of_all_elements_located((By.TAG_NAME, "button"))
+                        )
                         
-                        for btn in buttons:
+                        for btn in buttons[:20]:  # 처음 20개만 확인 (성능)
                             btn_text = btn.text.strip()
-                            if "전체" in btn_text or "답글" in btn_text:
-                                # 드롭다운 열기
+                            if "답글여부" in btn_text or btn_text == "전체":
                                 driver.execute_script("arguments[0].click();", btn)
-                                time.sleep(0.5)
-                                
-                                # "미등록" 옵션 찾기
                                 time.sleep(0.3)
-                                all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), '미등록')]")
-                                for elem in all_elements:
-                                    if elem.text.strip() == "미등록":
-                                        driver.execute_script("arguments[0].click();", elem)
-                                        filter_applied = True
-                                        print("  ✅ '미등록' filter applied via dropdown!")
-                                        time.sleep(2)  # 필터 적용 및 리뷰 재로딩 대기
-                                        break
-                                if filter_applied:
+                                
+                                # "미등록" 찾기 (빠르게)
+                                unreplied_elems = driver.find_elements(By.XPATH, "//*[text()='미등록']")
+                                if unreplied_elems:
+                                    driver.execute_script("arguments[0].click();", unreplied_elems[0])
+                                    filter_applied = True
+                                    print("  ✅ '미등록' filter applied!")
+                                    time.sleep(1.5)
                                     break
-                    except Exception as e:
-                        print(f"  ⚠️ Dropdown method failed: {e}")
+                    except:
+                        pass  # 빠르게 실패
                 
                 if not filter_applied:
-                    print("  ℹ️ Could not apply '미등록' filter - continuing with all reviews")
+                    print("  ℹ️ Filter not found (continuing without filter)")
                     
             except Exception as filter_error:
-                print(f"  ⚠️ Filter application error (non-critical): {filter_error}")
-                print("  ℹ️ Continuing without filter...")
+                print(f"  ℹ️ Filter skip: {str(filter_error)[:50]}")
             
             # 🚀 점진적 로딩 전략: 10개씩 렌더링하면서 찾기 (속도 향상!)
             print(f"🚀 Progressive loading: Searching in chunks of 10 reviews...")
@@ -1501,7 +1496,23 @@ class NaverPlaceAutomationSelenium:
             textarea.send_keys(reply_text_safe)
             time.sleep(1)
             
-            print("✅ Text input completed")
+            # 🔍 검증: 텍스트가 실제로 입력되었는지 확인
+            actual_value = driver.execute_script("return arguments[0].value;", textarea)
+            if len(actual_value) < 10:
+                print(f"⚠️  Textarea value too short: '{actual_value[:50]}'")
+                print("   Retrying with JavaScript...")
+                # JavaScript로 직접 설정 시도
+                driver.execute_script(
+                    "arguments[0].value = arguments[1]; "
+                    "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+                    "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+                    textarea, reply_text_safe
+                )
+                time.sleep(0.5)
+                actual_value = driver.execute_script("return arguments[0].value;", textarea)
+                print(f"   After JS: {len(actual_value)} chars")
+            else:
+                print(f"✅ Text input verified: {len(actual_value)} chars")
             
             # 🚀 target_review 내에서만 "등록" 찾기
             print("📤 Finding '등록' button in target review...")
@@ -1517,32 +1528,101 @@ class NaverPlaceAutomationSelenium:
                     raise Exception("No '등록' button found")
                 print(f"✅ Found visible '등록' (index {len(visible)-1})")
             
+            # 🔍 등록 버튼 상태 확인
+            is_disabled = submit_btn.get_attribute("disabled")
+            is_aria_disabled = submit_btn.get_attribute("aria-disabled")
+            if is_disabled or is_aria_disabled == "true":
+                print(f"❌ Submit button is disabled! (disabled={is_disabled}, aria-disabled={is_aria_disabled})")
+                raise Exception("등록 버튼이 비활성화 상태입니다")
+            
             print("🖱️  Clicking '등록'...")
             driver.execute_script("arguments[0].click();", submit_btn)
-            time.sleep(5)
+            time.sleep(2)
+            
+            # 🔍 등록 후 에러 메시지 확인
+            try:
+                # 네이버 에러 메시지 패턴 확인
+                error_selectors = [
+                    "[class*='error']",
+                    "[class*='alert']",
+                    "[role='alert']",
+                    ".pui__notification",
+                    "[class*='toast']"
+                ]
+                error_found = False
+                for selector in error_selectors:
+                    error_elems = driver.find_elements(By.CSS_SELECTOR, selector)
+                    for elem in error_elems:
+                        if elem.is_displayed() and elem.text.strip():
+                            print(f"⚠️  Error message detected: {elem.text[:100]}")
+                            error_found = True
+                if not error_found:
+                    print("   No error messages detected")
+            except:
+                pass
+            
+            time.sleep(3)  # 총 5초 대기 (2초 + 3초)
             
             # 🚀 CRITICAL: 검증 - 실패 시 에러 발생
             print("🔍 Verifying reply...")
-            time.sleep(2)
+            time.sleep(3)  # 2초 → 3초로 증가 (네이버 렌더링 대기)
             
             reply_verified = False
-            try:
-                reply_elem = target_review.find_element(By.CLASS_NAME, "pui__GbW8H7")
-                reply_preview = reply_elem.text[:50]
-                print(f"✅ Reply verified: {reply_preview}...")
-                reply_verified = True
-            except:
-                print("❌ Could not verify reply element!")
             
+            # 🔧 FIX: target_review가 stale일 수 있으므로 다시 찾기
+            try:
+                # 방법 1: 작성자+날짜로 다시 찾기 (더 안정적)
+                author_prefix = author[:3]
+                date_clean = re.sub(r'\([^)]*\)', '', date).strip()  # 요일 제거
+                
+                all_lis = driver.find_elements(By.TAG_NAME, "li")
+                for li in all_lis:
+                    try:
+                        li_author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                        if not li_author.startswith(author_prefix):
+                            continue
+                        
+                        li_date = ""
+                        d_elems = li.find_elements(By.CLASS_NAME, "pui__m7nkds")
+                        for d in d_elems:
+                            if re.search(r'20\d{2}\.', d.text):
+                                li_date = d.text.strip()
+                                break
+                        
+                        li_date_clean = re.sub(r'\([^)]*\)', '', li_date).strip()
+                        
+                        if li_date_clean == date_clean:
+                            # 이 리뷰에서 답글 요소 찾기
+                            reply_elem = li.find_element(By.CLASS_NAME, "pui__GbW8H7")
+                            reply_preview = reply_elem.text[:50]
+                            print(f"✅ Reply verified: {reply_preview}...")
+                            reply_verified = True
+                            break
+                    except:
+                        continue
+                
+                if not reply_verified:
+                    print("⚠️ Could not find reply element by re-searching")
+            except Exception as e:
+                print(f"❌ Verification error: {e}")
+            
+            # 🚨 CRITICAL: Verification 실패 = 답글 등록 실패
             if not reply_verified:
                 raise Exception("Reply verification failed - 답글이 실제로 게시되지 않았습니다")
             
-            print(f"✅ Reply posted and verified successfully!")
-            
-            return {
-                'success': True,
-                'message': 'Reply posted successfully'
-            }
+            if reply_verified:
+                print(f"✅ Reply posted and verified successfully!")
+                return {
+                    'success': True,
+                    'message': 'Reply posted and verified successfully'
+                }
+            else:
+                print(f"⚠️ Reply posted (verification skipped due to DOM changes)")
+                return {
+                    'success': True,
+                    'message': 'Reply posted successfully (verification skipped)',
+                    'verified': False
+                }
             
         except Exception as e:
             error_msg = str(e)
