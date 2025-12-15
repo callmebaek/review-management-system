@@ -12,6 +12,7 @@ export default function Reviews() {
   const platform = searchParams.get('platform') || 'gbp'
   const locationName = searchParams.get('location')
   const placeId = searchParams.get('place_id')
+  const placeName = searchParams.get('place_name') // 🎯 매장명을 URL에서 직접 가져오기
 
   const [filter, setFilter] = useState('all') // Start with 'all' - load everything at once
   const [naverPage, setNaverPage] = useState(1)
@@ -431,7 +432,10 @@ export default function Reviews() {
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-1">
                   <h1 className="text-3xl font-bold text-gray-900">
-                    {platform === 'gbp' ? currentLocation?.location_name : currentLocation?.name || '리뷰 관리'}
+                    {platform === 'gbp' 
+                      ? (currentLocation?.location_name || '리뷰 관리')
+                      : (placeName || currentLocation?.name || '리뷰 관리')
+                    }
                   </h1>
                   <span className={`text-sm px-3 py-1.5 rounded-full font-semibold shadow-sm ${
                     platform === 'gbp' 
@@ -791,7 +795,7 @@ export default function Reviews() {
           isOpen={showAISettingsModal}
           onClose={() => setShowAISettingsModal(false)}
           placeId={placeId}
-          placeName={currentLocation?.name || naverPlaces?.find(p => p.place_id === placeId)?.name}
+          placeName={placeName || currentLocation?.name || naverPlaces?.find(p => p.place_id === placeId)?.name}
         />
       )}
     </div>

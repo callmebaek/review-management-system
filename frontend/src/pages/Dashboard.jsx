@@ -483,7 +483,7 @@ export default function Dashboard() {
                       <div
                         key={place.place_id}
                         className="bg-white rounded-lg shadow-sm border border-green-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => navigate(`/reviews?platform=naver&place_id=${encodeURIComponent(place.place_id)}`)}
+                        onClick={() => navigate(`/reviews?platform=naver&place_id=${encodeURIComponent(place.place_id)}&place_name=${encodeURIComponent(place.name || '매장')}`)}
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center">
