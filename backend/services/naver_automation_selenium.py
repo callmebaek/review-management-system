@@ -1159,7 +1159,11 @@ class NaverPlaceAutomationSelenium:
             
             # 🚀 점진적 로딩 전략: 10개씩 렌더링하면서 찾기 (속도 향상!)
             print(f"🚀 Progressive loading: Searching in chunks of 10 reviews...")
-            print(f"🎯 Target: author='{author[:3]}...', date='{date}'")
+            
+            # 🔧 날짜에서 요일 제거 (비교 전) - 한 번만 실행
+            date_clean = re.sub(r'\([^)]*\)', '', date).strip()
+            author_prefix = author[:min(3, len(author))]
+            print(f"🎯 Target: author='{author_prefix}...', date='{date_clean}'")
             
             scroll_count = 0
             max_scrolls = 20
@@ -1220,11 +1224,9 @@ class NaverPlaceAutomationSelenium:
                                 continue
                             
                             # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
-                            date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
-                            li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
+                            li_date_clean = re.sub(r'\([^)]*\)', '', li_date).strip()
                             
-                            # 작성자 매칭 (앞 3글자)
-                            author_prefix = author[:min(3, len(author))]
+                            # 작성자 매칭 (앞 3글자) - author_prefix는 위에서 이미 정의됨
                             author_match = li_author.startswith(author_prefix)
                             date_match = li_date_clean == date_clean
                             
@@ -1306,14 +1308,10 @@ class NaverPlaceAutomationSelenium:
                         except:
                             continue
                         
-                        # 🚀 작성자 + 날짜 매칭 (요일 제거, 작성자 부분 일치)
-                        # 요일 제거: "2025. 12. 10(수)" → "2025. 12. 10"
-                        import re
-                        date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
-                        li_date_clean = re.sub(r'\([월화수목금토일]\)', '', li_date).strip()
+                        # 🚀 작성자 + 날짜 매칭 (요일 제거) - 변수는 이미 위에서 정의됨
+                        li_date_clean = re.sub(r'\([^)]*\)', '', li_date).strip()
                         
                         # 🚀 3중 매칭: 작성자(부분) + 날짜 + 내용(부분)
-                        author_prefix = author[:min(3, len(author))]
                         author_match = li_author.startswith(author_prefix)
                         date_match = li_date_clean == date_clean
                         
@@ -1335,10 +1333,7 @@ class NaverPlaceAutomationSelenium:
                         continue
             
             if not target_review:
-                # 요일 제거된 값으로 에러 메시지
-                date_clean = re.sub(r'\([월화수목금토일]\)', '', date).strip()
-                author_prefix = author[:min(3, len(author))]
-                
+                # 에러 메시지 (date_clean, author_prefix는 이미 정의됨)
                 print(f"❌ Could not find review!")
                 print(f"   Looking for: author starts with '{author_prefix}', date='{date_clean}'")
                 print(f"   Original: author='{author}', date='{date}'")
@@ -1521,23 +1516,26 @@ class NaverPlaceAutomationSelenium:
             
             # 🔍 등록 후 에러 메시지 확인
             try:
-                # 네이버 에러 메시지 패턴 확인
+                # 🔧 네이버 에러 메시지만 정확히 감지 (false positive 방지)
                 error_selectors = [
-                    "[class*='error']",
-                    "[class*='alert']",
                     "[role='alert']",
-                    ".pui__notification",
-                    "[class*='toast']"
+                    ".alert-error",
+                    ".error-message",
+                    "[class*='toast'][class*='error']",
+                    "[class*='notification'][class*='error']"
                 ]
                 error_found = False
                 for selector in error_selectors:
                     error_elems = driver.find_elements(By.CSS_SELECTOR, selector)
                     for elem in error_elems:
-                        if elem.is_displayed() and elem.text.strip():
-                            print(f"⚠️  Error message detected: {elem.text[:100]}")
-                            error_found = True
+                        if elem.is_displayed():
+                            text = elem.text.strip()
+                            # 🔧 페이지 타이틀/헤더는 제외 (false positive 방지)
+                            if text and len(text) > 5 and "스마트플레이스" not in text and "SmartPlace" not in text:
+                                print(f"⚠️  Error message detected: {text[:100]}")
+                                error_found = True
                 if not error_found:
-                    print("   No error messages detected")
+                    print("   ✅ No error messages detected")
             except:
                 pass
             
@@ -1557,9 +1555,7 @@ class NaverPlaceAutomationSelenium:
                         print(f"   🔄 Verification retry {retry}/{max_retry-1}...")
                         time.sleep(2)  # 재시도 시 추가 대기
                     
-                    # 작성자+날짜로 다시 찾기 (더 안정적)
-                    author_prefix = author[:3]
-                    date_clean = re.sub(r'\([^)]*\)', '', date).strip()  # 요일 제거
+                    # 작성자+날짜로 다시 찾기 (이미 위에서 정의된 변수 사용)
                     
                     all_lis = driver.find_elements(By.TAG_NAME, "li")
                     for li in all_lis:
