@@ -125,30 +125,32 @@ export default function AISettingsModal({ isOpen, onClose, placeId, placeName })
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl my-4 sm:my-8 flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between flex-shrink-0">
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold text-white truncate">AI 답글 생성 설정</h2>
-            <p className="text-purple-100 text-xs sm:text-sm mt-1">
-              {placeName ? (
-                <>
-                  <span className="font-semibold">{placeName}</span>
-                  <span className="text-purple-200 ml-1 sm:ml-2 hidden sm:inline">(ID: {placeId})</span>
-                </>
-              ) : (
-                <span>매장 ID: {placeId}</span>
-              )}
-            </p>
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">🎨 AI 답글 생성 설정</h2>
+            {placeName ? (
+              <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2 backdrop-blur-sm">
+                <p className="text-xs text-purple-100 mb-0.5">매장 이름</p>
+                <p className="text-base sm:text-lg font-bold text-white truncate">{placeName}</p>
+                <p className="text-xs text-purple-200 mt-0.5">ID: {placeId}</p>
+              </div>
+            ) : (
+              <div className="bg-white bg-opacity-20 rounded-lg px-3 py-2 backdrop-blur-sm">
+                <p className="text-xs text-purple-100 mb-0.5">매장</p>
+                <p className="text-sm text-white">ID: {placeId}</p>
+              </div>
+            )}
             {isDefault && (
-              <span className="inline-block mt-1 sm:mt-2 px-2 py-1 bg-yellow-400 text-yellow-900 text-xs rounded font-medium">
-                기본값 사용 중
+              <span className="inline-block mt-2 px-2.5 py-1 bg-yellow-400 text-yellow-900 text-xs rounded-full font-semibold shadow-sm">
+                ⚙️ 기본값 사용 중
               </span>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition flex-shrink-0"
+            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition flex-shrink-0 ml-3"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
 

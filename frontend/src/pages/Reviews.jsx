@@ -418,31 +418,40 @@ export default function Reviews() {
       )}
       
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="bg-gradient-to-r from-white to-gray-50 shadow-sm border-b-2 border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
+            <div className="flex items-center flex-1">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="mr-4 text-gray-600 hover:text-gray-900"
+                className="mr-4 text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded-lg transition"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
-              <div>
-                <div className="flex items-center space-x-3">
-                  <h1 className="text-2xl font-bold text-gray-900">
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-1">
+                  <h1 className="text-3xl font-bold text-gray-900">
                     {platform === 'gbp' ? currentLocation?.location_name : currentLocation?.name || '리뷰 관리'}
                   </h1>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  <span className={`text-sm px-3 py-1.5 rounded-full font-semibold shadow-sm ${
                     platform === 'gbp' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-green-100 text-green-700'
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-green-500 text-white'
                   }`}>
-                    {platform === 'gbp' ? 'GBP' : '네이버'}
+                    {platform === 'gbp' ? 'Google' : 'Naver'}
                   </span>
                 </div>
                 {currentLocation?.address && (
-                  <p className="text-sm text-gray-600 mt-1">{currentLocation.address}</p>
+                  <p className="text-sm text-gray-600 mt-1 flex items-center">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {currentLocation.address}
+                  </p>
+                )}
+                {platform === 'naver' && placeId && (
+                  <p className="text-xs text-gray-500 mt-1">매장 ID: {placeId}</p>
                 )}
               </div>
             </div>
@@ -782,7 +791,7 @@ export default function Reviews() {
           isOpen={showAISettingsModal}
           onClose={() => setShowAISettingsModal(false)}
           placeId={placeId}
-          placeName={naverPlaces?.find(p => p.place_id === placeId)?.name}
+          placeName={currentLocation?.name || naverPlaces?.find(p => p.place_id === placeId)?.name}
         />
       )}
     </div>
