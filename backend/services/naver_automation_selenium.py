@@ -1160,6 +1160,7 @@ class NaverPlaceAutomationSelenium:
             target_review = None
             batch_size = 10  # 10개씩 처리
             last_check_count = 0  # 마지막으로 확인한 리뷰 개수
+            consecutive_no_load = 0  # 🔧 연속으로 새 리뷰가 로드되지 않은 횟수
             
             while scroll_count < max_scrolls and not target_review:
                 # 현재 페이지의 모든 요소 가져오기
@@ -1178,6 +1179,12 @@ class NaverPlaceAutomationSelenium:
                 newly_loaded = current_count - last_check_count
                 
                 print(f"  📦 Batch {scroll_count + 1}: {current_count} total reviews ({newly_loaded} newly loaded)")
+                
+                # 🔧 연속 0개 카운트 업데이트
+                if newly_loaded == 0:
+                    consecutive_no_load += 1
+                else:
+                    consecutive_no_load = 0  # 리셋
                 
                 # 🔍 새로 로드된 리뷰에서만 검색 (효율적!)
                 search_start_idx = max(0, last_check_count)
@@ -1248,15 +1255,19 @@ class NaverPlaceAutomationSelenium:
                     else:
                         break
                 
-                # 새로 로드된 리뷰가 없으면 더 이상 스크롤 안 함
-                if newly_loaded == 0 and scroll_count > 2:
-                    print(f"  ℹ️ No new reviews loaded, stopping scroll")
+                # 🔧 FIX: expected_count를 고려하여 중단 결정
+                # 연속 3번 새 리뷰가 없고, 스크롤을 충분히 시도했으면 중단
+                if consecutive_no_load >= 3 and scroll_count >= 5:
+                    if current_count < expected_count:
+                        print(f"  ⚠️ Loaded only {current_count}/{expected_count}, but no more reviews available")
+                    else:
+                        print(f"  ℹ️ No new reviews loaded for {consecutive_no_load} attempts, stopping scroll")
                     break
                 
                 # 다음 배치를 위해 스크롤
                 last_check_count = current_count
                 driver.execute_script("window.scrollBy(0, 1500);")
-                time.sleep(1)
+                time.sleep(1.5)  # 🔧 1초 → 1.5초로 증가 (네이버 동적 로딩 대기)
                 scroll_count += 1
             
             # 🔍 타겟을 못 찾았으면 전체 다시 검색 (안전장치)
