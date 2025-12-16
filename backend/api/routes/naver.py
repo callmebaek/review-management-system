@@ -37,6 +37,8 @@ class NaverSessionUpload(BaseModel):
     cookies: List[Dict]
     user_id: Optional[str] = "default"
     username: Optional[str] = None
+    user_agent: Optional[str] = None  # 🚀 세션 생성 시의 User-Agent
+    window_size: Optional[str] = None  # 🚀 세션 생성 시의 해상도
 
 
 @router.post("/login")
@@ -517,6 +519,8 @@ async def upload_session(
                 "username": session_data.username,
                 "google_emails": google_emails,  # 배열!
                 "cookies": session_data.cookies,
+                "user_agent": session_data.user_agent or existing_session.get("user_agent"),  # 🚀 저장
+                "window_size": session_data.window_size or existing_session.get("window_size"),  # 🚀 저장
                 "created_at": existing_session.get("created_at", datetime.utcnow()),
                 "expires_at": datetime.utcnow() + timedelta(days=7),
                 "last_used": datetime.utcnow(),
@@ -530,6 +534,8 @@ async def upload_session(
                 "username": session_data.username,
                 "google_emails": new_emails,  # 여러 개 한번에!
                 "cookies": session_data.cookies,
+                "user_agent": session_data.user_agent,  # 🚀 저장
+                "window_size": session_data.window_size,  # 🚀 저장
                 "created_at": datetime.utcnow(),
                 "expires_at": datetime.utcnow() + timedelta(days=7),
                 "last_used": datetime.utcnow(),
