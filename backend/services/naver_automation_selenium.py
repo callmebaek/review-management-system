@@ -737,8 +737,8 @@ class NaverPlaceAutomationSelenium:
                 except Exception as e:
                     print(f"⚠️ Error extracting places from page source: {e}")
                     logger.error(f"Error extracting places from page source: {e}")
-            
-            print(f"📊 Total places found: {len(places)}")
+                
+                print(f"📊 Total places found: {len(places)}")
                 logger.info(f"✅ Found {len(places)} places")
                 
                 # 🚀 Save to cache (user별로 저장!)
@@ -749,9 +749,9 @@ class NaverPlaceAutomationSelenium:
                 return places
                 
             except Exception as e:
-            print(f"❌ Error getting places: {e}")
-            logger.error(f"Error getting places: {e}")
-            raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
+                print(f"❌ Error getting places: {e}")
+                logger.error(f"Error getting places: {e}")
+                raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
             
         finally:
             if driver:
