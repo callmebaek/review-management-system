@@ -32,9 +32,16 @@ class NaverPlaceAutomationSelenium:
         self.session_file = os.path.join(settings.data_dir, "naver_sessions", "session_selenium.json")
         os.makedirs(os.path.dirname(self.session_file), exist_ok=True)
         
-        # 🚀 Performance optimization: Cache for places list
-        self._places_cache: Optional[List[Dict]] = None
-        self._places_cache_time: Optional[datetime] = None
+        # 🚀 Multi-account support
+        self.active_user_id = "default"  # Default user
+        
+        # 🔒 Thread Lock for race condition prevention
+        import threading
+        self._user_lock = threading.Lock()  # API 호출 간 user_id 보호
+        
+        # 🚀 Performance optimization: Cache for places list (user별로 분리!)
+        self._places_cache: Dict[str, List[Dict]] = {}  # {user_id: [places]}
+        self._places_cache_time: Dict[str, datetime] = {}  # {user_id: datetime}
         self._cache_ttl = timedelta(minutes=5)  # 5분간 캐시 유지
 
         # 🚀 REVIEWS CACHE (Performance & Pagination Fix)
@@ -46,10 +53,69 @@ class NaverPlaceAutomationSelenium:
         # Structure: { place_id: { 'status': str, 'count': int, 'message': str, 'timestamp': datetime } }
         self._loading_progress: Dict[str, Dict] = {}
     
-    def _create_driver(self, headless=True):
-        """Create and configure Chrome WebDriver"""
-        print("🌐 Creating Chrome WebDriver...")
-        logger.info("🌐 Creating Chrome WebDriver...")
+    def _load_session_from_mongodb(self, user_id="default"):
+        """Load session from MongoDB (cloud storage)
+        
+        Returns:
+            dict with 'cookies', 'user_agent', 'window_size' or None
+        """
+        try:
+            if not settings.use_mongodb or not settings.mongodb_url:
+                return None
+            
+            from utils.db import get_db
+            db = get_db()
+            if db is None:
+                return None
+            
+            session = db.naver_sessions.find_one({"_id": user_id})
+            if session and session.get('cookies'):
+                print(f"📦 Found session in MongoDB for user '{user_id}' ({len(session['cookies'])} cookies)")
+                
+                # 🔧 CRITICAL: User-Agent와 window_size도 함께 반환
+                user_agent = session.get('user_agent')
+                window_size = session.get('window_size')
+                
+                if user_agent:
+                    print(f"   ✅ User-Agent: {user_agent[:80]}...")
+                if window_size:
+                    print(f"   ✅ Window Size: {window_size}")
+                
+                # Update last_used timestamp
+                db.naver_sessions.update_one(
+                    {"_id": user_id},
+                    {"$set": {"last_used": datetime.utcnow()}}
+                )
+                
+                return {
+                    'cookies': session['cookies'],
+                    'user_agent': user_agent,
+                    'window_size': window_size
+                }
+            
+            return None
+        except Exception as e:
+            logger.error(f"❌ MongoDB session load error: {e}")
+            return None
+    
+    def set_active_user(self, user_id="default"):
+        """Set the active user ID for this session"""
+        self.active_user_id = user_id
+        print(f"🔄 Active user switched to: {user_id}")
+    
+    def _create_driver(self, headless=True, user_id=None):
+        """
+        Create and configure Chrome WebDriver
+        
+        Args:
+            headless: Run in headless mode
+            user_id: User ID for session loading (if None, uses self.active_user_id)
+        """
+        # 🔒 user_id 파라미터 우선 사용 (race condition 방지)
+        effective_user_id = user_id if user_id else self.active_user_id
+        
+        print(f"🌐 Creating Chrome WebDriver for user: {effective_user_id}")
+        logger.info(f"🌐 Creating Chrome WebDriver for user: {effective_user_id}")
         
         chrome_options = Options()
         if headless:
@@ -60,27 +126,69 @@ class NaverPlaceAutomationSelenium:
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
+        # 🔧 CRITICAL: 기본값 설정 (MongoDB에서 로드한 값으로 나중에 덮어쓸 수 있음)
+        default_window_size = '1280,720'  # Reduced from 1920x1080
+        default_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        
+        chrome_options.add_argument(f'--window-size={default_window_size}')
+        chrome_options.add_argument(f'--user-agent={default_user_agent}')
+        
+        # 🔧 CRITICAL: MongoDB에서 세션 메타데이터 로드 후 Chrome 옵션 업데이트
+        session_data = None
+        cookies = None
+        
+        # Priority 1: Try MongoDB (cloud storage) with effective user ID
+        session_data = self._load_session_from_mongodb(effective_user_id)
+        if session_data:
+            print(f"✅ Using session from MongoDB (cloud) for user: {effective_user_id}")
+            cookies = session_data.get('cookies')
+            
+            # 🔧 CRITICAL: 실제 세션 생성 시 사용한 User-Agent와 해상도 적용
+            saved_user_agent = session_data.get('user_agent')
+            saved_window_size = session_data.get('window_size')
+            
+            if saved_user_agent:
+                print(f"   🔧 Applying saved User-Agent: {saved_user_agent[:80]}...")
+                # User-Agent 재설정
+                for i, arg in enumerate(chrome_options.arguments):
+                    if arg.startswith('--user-agent='):
+                        chrome_options.arguments[i] = f'--user-agent={saved_user_agent}'
+                        break
+            
+            if saved_window_size:
+                print(f"   🔧 Applying saved Window Size: {saved_window_size}")
+                # Window Size 재설정
+                for i, arg in enumerate(chrome_options.arguments):
+                    if arg.startswith('--window-size='):
+                        chrome_options.arguments[i] = f'--window-size={saved_window_size}'
+                        break
+        
+        # Priority 2: Try local file (fallback)
+        elif os.path.exists(self.session_file):
+            print("📂 Using session from local file")
+            with open(self.session_file, 'r', encoding='utf-8') as f:
+                cookies = json.load(f)
+        
+        # 🔧 CRITICAL: Chrome 옵션 적용 후 드라이버 생성
         # Auto-install ChromeDriver
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        # Load session if exists
-        if os.path.exists(self.session_file):
-            logger.info("📂 Loading saved session...")
-            print("📂 Loading saved session cookies...")
+        # Load cookies if found
+        if cookies:
+            logger.info(f"📂 Loading saved session ({len(cookies)} cookies)...")
+            print(f"📂 Loading {len(cookies)} cookies...")
             
             # Step 1: Navigate to Naver domain first
             driver.get('https://www.naver.com')
             time.sleep(1)
             
             # Step 2: Load and add all cookies
-            with open(self.session_file, 'r', encoding='utf-8') as f:
-                cookies = json.load(f)
-            
             cookies_added = 0
+            failed_cookies = []
+            critical_cookies = ['NID_AUT', 'NID_SES', 'NID_JKL']  # 네이버 인증 핵심 쿠키
+            
             for cookie in cookies:
                 try:
                     # Clean up cookie data for Selenium
@@ -92,9 +200,29 @@ class NaverPlaceAutomationSelenium:
                     driver.add_cookie(cookie)
                     cookies_added += 1
                 except Exception as e:
-                    logger.debug(f"Failed to add cookie {cookie.get('name')}: {e}")
+                    cookie_name = cookie.get('name', 'unknown')
+                    failed_cookies.append(cookie_name)
+                    
+                    # 🔧 CRITICAL: 중요 쿠키 실패 시 경고
+                    if cookie_name in critical_cookies:
+                        logger.error(f"❌ CRITICAL: Failed to add important cookie '{cookie_name}': {e}")
+                        print(f"❌ CRITICAL: Failed to add important cookie '{cookie_name}': {e}")
+                    else:
+                        logger.debug(f"Failed to add cookie {cookie_name}: {e}")
             
             print(f"✅ Added {cookies_added}/{len(cookies)} cookies")
+            
+            # 🔧 실패한 쿠키 로깅
+            if failed_cookies:
+                print(f"⚠️ Failed to add {len(failed_cookies)} cookies: {', '.join(failed_cookies)}")
+                logger.warning(f"Failed cookies: {', '.join(failed_cookies)}")
+                
+                # 중요 쿠키가 실패했으면 세션이 제대로 작동하지 않을 수 있음
+                critical_failed = [c for c in failed_cookies if c in critical_cookies]
+                if critical_failed:
+                    print(f"❌ WARNING: Critical authentication cookies failed: {', '.join(critical_failed)}")
+                    print(f"   → Session may not work properly!")
+                    logger.error(f"Critical cookies failed: {', '.join(critical_failed)}")
             
             # Step 3: CRITICAL - Refresh page to apply cookies
             print("🔄 Refreshing page to apply cookies...")
@@ -295,13 +423,11 @@ class NaverPlaceAutomationSelenium:
                 driver.quit()
     
     def check_login_status(self) -> Dict:
-        # ... (Same as before)
-        """Check if logged in to Naver (based on session file)"""
-        # Simply check if session file exists
-        # Actual login validation will happen when making requests
+        """Check if logged in to Naver (based on session file or MongoDB)"""
         print(f"🔍 Checking session file: {self.session_file}")
         print(f"🔍 Session file exists: {os.path.exists(self.session_file)}")
         
+        # Priority 1: Check local session file
         if os.path.exists(self.session_file):
             logger.info("✅ Session file found - assuming logged in")
             print("✅ Session file found - returning logged_in=True")
@@ -309,34 +435,76 @@ class NaverPlaceAutomationSelenium:
                 'logged_in': True,
                 'message': 'Logged in to Naver (session file found)'
             }
-        else:
-            logger.info("❌ No session file found")
-            print("❌ No session file found - returning logged_in=False")
-            return {
-                'logged_in': False,
-                'message': 'No session found. Please login first.'
-            }
+        
+        # Priority 2: Check MongoDB session (using active user ID)
+        try:
+            # 🔧 CRITICAL: MongoDB에서 직접 세션 조회하여 만료 시간 확인
+            from utils.db import get_db
+            db = get_db()
+            if db is not None:
+                session = db.naver_sessions.find_one({"_id": self.active_user_id})
+                if session:
+                    # 만료 시간 확인
+                    expires_at = session.get('expires_at')
+                    if expires_at:
+                        now = datetime.utcnow()
+                        if now > expires_at:
+                            print(f"⚠️ Session expired for user '{self.active_user_id}' (expired at: {expires_at})")
+                            logger.warning(f"Session expired for user: {self.active_user_id}")
+                            return {
+                                'logged_in': False,
+                                'message': f'세션이 만료되었습니다 (만료일: {expires_at.strftime("%Y-%m-%d")}). 새로운 세션을 업로드해주세요.',
+                                'expired': True,
+                                'expires_at': expires_at.isoformat()
+                            }
+                        else:
+                            remaining_days = (expires_at - now).days
+                            print(f"✅ MongoDB session valid for user '{self.active_user_id}' (remaining: {remaining_days} days)")
+                    
+                    logger.info(f"✅ MongoDB session found for user: {self.active_user_id}")
+                    print(f"✅ MongoDB session found for user '{self.active_user_id}' - returning logged_in=True")
+                    return {
+                        'logged_in': True,
+                        'message': f'Logged in to Naver (MongoDB session found for {self.active_user_id})',
+                        'active_user': self.active_user_id
+                    }
+        except Exception as e:
+            logger.error(f"❌ MongoDB session check error: {e}")
+            print(f"❌ MongoDB session check error: {e}")
+        
+        # No session found
+        logger.info("❌ No session found")
+        print("❌ No session found - returning logged_in=False")
+        return {
+            'logged_in': False,
+            'message': 'No session found. Please login first.'
+        }
     
     def get_places(self) -> List[Dict]:
-        # ... (Same as before)
         """Get list of places from Smartplace Center (with 5-minute cache)"""
         
-        # 🚀 Check cache first
-        if self._places_cache is not None and self._places_cache_time is not None:
-            cache_age = datetime.now() - self._places_cache_time
-            if cache_age < self._cache_ttl:
-                print(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                logger.info(f"⚡ Using cached places (age: {int(cache_age.total_seconds())}s)")
-                return self._places_cache
-            else:
-                print(f"🔄 Cache expired (age: {int(cache_age.total_seconds())}s), refreshing...")
-                logger.info("🔄 Cache expired, refreshing...")
-        
-        driver = None
-        try:
-            print("📍 Getting places from Smartplace Center...")
-            logger.info("📍 Getting places...")
-            driver = self._create_driver(headless=True)
+        # 🔒 Lock으로 race condition 방지
+        with self._user_lock:
+            current_user_id = self.active_user_id  # Race condition 방지
+            print(f"🔒 Acquired lock for get_places() - user: {current_user_id}")
+            
+            # 🚀 Check cache first (user별로 확인!)
+            if current_user_id in self._places_cache and current_user_id in self._places_cache_time:
+                cache_age = datetime.now() - self._places_cache_time[current_user_id]
+                if cache_age < self._cache_ttl:
+                    print(f"⚡ Using cached places for user {current_user_id} (age: {int(cache_age.total_seconds())}s)")
+                    logger.info(f"⚡ Using cached places for user {current_user_id} (age: {int(cache_age.total_seconds())}s)")
+                    return self._places_cache[current_user_id]
+                else:
+                    print(f"🔄 Cache expired for user {current_user_id} (age: {int(cache_age.total_seconds())}s), refreshing...")
+                    logger.info(f"🔄 Cache expired for user {current_user_id}, refreshing...")
+            
+            driver = None
+            try:
+                # current_user_id는 위에서 이미 선언됨 (Lock 내부)
+                print(f"📍 Getting places from Smartplace Center for user: {current_user_id}")
+                logger.info(f"📍 Getting places for user: {current_user_id}")
+                driver = self._create_driver(headless=True, user_id=current_user_id)
             
             # Go to business list page
             print("🏠 Accessing Smartplace business list...")
@@ -505,16 +673,16 @@ class NaverPlaceAutomationSelenium:
                     logger.error(f"Error extracting places from page source: {e}")
             
             print(f"📊 Total places found: {len(places)}")
-            logger.info(f"✅ Found {len(places)} places")
-            
-            # 🚀 Save to cache
-            self._places_cache = places
-            self._places_cache_time = datetime.now()
-            print(f"💾 Cached {len(places)} places for 5 minutes")
-            
-            return places
-            
-        except Exception as e:
+                logger.info(f"✅ Found {len(places)} places")
+                
+                # 🚀 Save to cache (user별로 저장!)
+                self._places_cache[current_user_id] = places
+                self._places_cache_time[current_user_id] = datetime.now()
+                print(f"💾 Cached {len(places)} places for user {current_user_id} (5 minutes)")
+                
+                return places
+                
+            except Exception as e:
             print(f"❌ Error getting places: {e}")
             logger.error(f"Error getting places: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
