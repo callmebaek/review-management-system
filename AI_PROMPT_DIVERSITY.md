@@ -513,7 +513,3 @@ Presence Penalty: 비용 동일
 
 
 
-
-
-
-

@@ -120,10 +120,39 @@ class NaverPlaceAutomationSelenium:
         chrome_options = Options()
         if headless:
             chrome_options.add_argument('--headless=new')
+        
+        # Essential options for Heroku
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        
+        # Heroku specific - Memory optimization
+        chrome_options.add_argument('--single-process')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--remote-debugging-port=9222')
+        
+        # Additional memory saving options for Heroku
+        chrome_options.add_argument('--disable-background-networking')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        chrome_options.add_argument('--disable-breakpad')
+        chrome_options.add_argument('--disable-component-extensions-with-background-pages')
+        chrome_options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees')
+        chrome_options.add_argument('--disable-ipc-flooding-protection')
+        chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
+        chrome_options.add_argument('--force-color-profile=srgb')
+        chrome_options.add_argument('--hide-scrollbars')
+        chrome_options.add_argument('--metrics-recording-only')
+        chrome_options.add_argument('--mute-audio')
+        
+        # Set memory limits
+        chrome_options.add_argument('--max_old_space_size=256')
+        chrome_options.add_argument('--js-flags=--max-old-space-size=256')
+        
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
@@ -171,8 +200,45 @@ class NaverPlaceAutomationSelenium:
                 cookies = json.load(f)
         
         # 🔧 CRITICAL: Chrome 옵션 적용 후 드라이버 생성
-        # Auto-install ChromeDriver
-        service = Service(ChromeDriverManager().install())
+        # Check if running on Heroku (has DYNO environment variable)
+        if os.environ.get('DYNO'):
+            print("🔧 Detected Heroku environment - using chrome-for-testing paths")
+            logger.info("🔧 Detected Heroku environment")
+            
+            # chrome-for-testing buildpack installs both Chrome and ChromeDriver in the same directory
+            chrome_base = '/app/.chrome-for-testing'
+            chrome_bin = f'{chrome_base}/chrome-linux64/chrome'
+            chromedriver_path = f'{chrome_base}/chromedriver-linux64/chromedriver'
+            
+            print(f"   Chrome binary: {chrome_bin}")
+            print(f"   ChromeDriver: {chromedriver_path}")
+            
+            # Verify files exist
+            if os.path.exists(chrome_bin):
+                print(f"   ✅ Chrome binary found")
+            else:
+                print(f"   ❌ Chrome binary NOT found at {chrome_bin}")
+                # Try to find it
+                import glob
+                chrome_files = glob.glob('/app/.chrome-for-testing/**/chrome', recursive=True)
+                print(f"   Found Chrome at: {chrome_files}")
+            
+            if os.path.exists(chromedriver_path):
+                print(f"   ✅ ChromeDriver found")
+            else:
+                print(f"   ❌ ChromeDriver NOT found at {chromedriver_path}")
+                # Try to find it
+                import glob
+                driver_files = glob.glob('/app/.chrome-for-testing/**/chromedriver', recursive=True)
+                print(f"   Found ChromeDriver at: {driver_files}")
+            
+            chrome_options.binary_location = chrome_bin
+            service = Service(executable_path=chromedriver_path)
+        else:
+            print("💻 Local environment - using ChromeDriverManager")
+            # Auto-install ChromeDriver for local development
+            service = Service(ChromeDriverManager().install())
+        
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
         # Load cookies if found

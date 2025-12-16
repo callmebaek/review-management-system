@@ -369,18 +369,9 @@ class NaverSessionCreator:
                 self.update_progress("✅ 로그인 성공!", 85)
                 time.sleep(1)
                 
-                # 6. 쿠키 및 브라우저 정보 추출
+                # 6. 쿠키 추출
                 self.update_progress("💾 세션 데이터 추출 중...", 90)
                 cookies = self.driver.get_cookies()
-                
-                # 🚀 User-Agent 추출 (실제 사용된 값)
-                user_agent = self.driver.execute_script("return navigator.userAgent")
-                print(f"📝 Extracted User-Agent: {user_agent}")
-                
-                # 🚀 Window Size 추출
-                window_size = self.driver.get_window_size()
-                window_size_str = f"{window_size['width']},{window_size['height']}"
-                print(f"📐 Extracted Window Size: {window_size_str}")
                 
                 # 7. 서버에 업로드 (재시도 로직 포함)
                 self.update_progress(f"⬆️ 서버에 업로드 중... ({len(cookies)}개 쿠키)", 95)
@@ -404,9 +395,7 @@ class NaverSessionCreator:
                             json={
                                 "cookies": cookies,
                                 "user_id": account_id,
-                                "username": username,
-                                "user_agent": user_agent,  # 🚀 실제 User-Agent 전송
-                                "window_size": window_size_str  # 🚀 실제 Window Size 전송
+                                "username": username
                             },
                             timeout=90
                         )
