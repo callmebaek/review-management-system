@@ -571,172 +571,185 @@ class NaverPlaceAutomationSelenium:
                 print(f"📍 Getting places from Smartplace Center for user: {current_user_id}")
                 logger.info(f"📍 Getting places for user: {current_user_id}")
                 driver = self._create_driver(headless=True, user_id=current_user_id)
-            
-            # Go to business list page
-            print("🏠 Accessing Smartplace business list...")
-            driver.get('https://new.smartplace.naver.com/bizes')
-            
-            # Wait for initial page load
-            print("⏳ Waiting for initial page load...")
-            time.sleep(2)
-            
-            # 🚀 CRITICAL: Handle popup/modal that appears on first visit
-            print("🔍 Checking for popups...")
-            try:
-                # Look for common popup/modal patterns
-                popup_button_selectors = [
-                    "button.Modal_btn_confirm__uQZFR",  # "확인" button
-                    "button[class*='confirm']",
-                    "button[class*='close']",
-                    ".dimmed button",
-                    "[class*='modal'] button"
-                ]
                 
-                for selector in popup_button_selectors:
+                # Go to business list page
+                print("🏠 Accessing Smartplace business list...")
+                driver.get('https://new.smartplace.naver.com/bizes')
+                
+                # 🔧 CRITICAL: 즉시 세션 유효성 검증 (로그인 페이지 리다이렉트 확인)
+                time.sleep(2)  # 리다이렉트가 발생할 수 있는 시간
+                current_url = driver.current_url
+                print(f"🔗 Current URL after load: {current_url}")
+                
+                if 'nid.naver.com' in current_url or 'login' in current_url.lower():
+                    print("❌ Session expired - redirected to login page")
+                    logger.error(f"Session expired for user {current_user_id}")
+                    raise HTTPException(
+                        status_code=401, 
+                        detail=f"네이버 세션이 만료되었습니다. 세션 생성기(EXE)를 사용해서 새로운 세션을 업로드해주세요. (User: {current_user_id})"
+                    )
+                
+                # Wait for initial page load
+                print("⏳ Waiting for initial page load...")
+                time.sleep(0.5)
+                
+                # 🚀 CRITICAL: Handle popup/modal that appears on first visit
+                print("🔍 Checking for popups...")
+                try:
+                    # Look for common popup/modal patterns
+                    popup_button_selectors = [
+                        "button.Modal_btn_confirm__uQZFR",  # "확인" button
+                        "button[class*='confirm']",
+                        "button[class*='close']",
+                        ".dimmed button",
+                        "[class*='modal'] button"
+                    ]
+                    
+                    for selector in popup_button_selectors:
+                        try:
+                            popup_btn = driver.find_element(By.CSS_SELECTOR, selector)
+                            if popup_btn.is_displayed():
+                                print(f"  ✅ Found popup button: {selector}")
+                                driver.execute_script("arguments[0].click();", popup_btn)
+                                print("  ✅ Popup closed!")
+                                time.sleep(1)  # Wait for popup to close
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    print(f"  ⚠️ No popup found (this is OK): {e}")
+                
+                # Wait for loading indicator to disappear or content to appear
+                # 🚀 Reduced timeout from 30s to 10s
+                print("⏳ Waiting for content to load (up to 10 seconds)...")
+                max_wait = 10
+                start_time = time.time()
+                content_loaded = False
+                
+                while time.time() - start_time < max_wait:
+                    # Check if there are any links with /bizes/place/ pattern
                     try:
-                        popup_btn = driver.find_element(By.CSS_SELECTOR, selector)
-                        if popup_btn.is_displayed():
-                            print(f"  ✅ Found popup button: {selector}")
-                            driver.execute_script("arguments[0].click();", popup_btn)
-                            print("  ✅ Popup closed!")
-                            time.sleep(1)  # Wait for popup to close
+                        all_links = driver.find_elements(By.TAG_NAME, "a")
+                        place_links = [link for link in all_links if link.get_attribute('href') and '/bizes/place/' in link.get_attribute('href')]
+                        
+                        if len(place_links) > 0:
+                            print(f"✅ Content loaded! Found {len(place_links)} place links")
+                            content_loaded = True
                             break
+                        else:
+                            print(f"⏳ Still loading... ({int(time.time() - start_time)}s elapsed)")
+                            time.sleep(1)  # 🚀 Reduced from 2s to 1s
                     except:
-                        continue
-            except Exception as e:
-                print(f"  ⚠️ No popup found (this is OK): {e}")
+                        time.sleep(1)
+                
+                if not content_loaded:
+                    print("⚠️ Timeout waiting for content to load - trying alternative method")
+                
+                current_url = driver.current_url
+                print(f"🔗 Current URL: {current_url}")
+                
+                # Check if logged in
+                if 'nid.naver.com' in current_url or 'login' in current_url.lower():
+                    print("❌ Not logged in")
+                    raise HTTPException(status_code=401, detail="Not logged in")
+                
+                # Take screenshot for debugging
+                screenshot_path = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.png")
+                driver.save_screenshot(screenshot_path)
+                print(f"📸 Screenshot saved: {screenshot_path}")
             
-            # Wait for loading indicator to disappear or content to appear
-            # 🚀 Reduced timeout from 30s to 10s
-            print("⏳ Waiting for content to load (up to 10 seconds)...")
-            max_wait = 10
-            start_time = time.time()
-            content_loaded = False
-            
-            while time.time() - start_time < max_wait:
-                # Check if there are any links with /bizes/place/ pattern
+                # Save page source for debugging
+                page_source = driver.page_source
+                page_source_file = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.html")
+                with open(page_source_file, 'w', encoding='utf-8') as f:
+                    f.write(page_source)
+                print(f"📄 Page source saved: {page_source_file}")
+                
+                places = []
+                
+                # Method 1: Try to find place links in <a> tags
                 try:
                     all_links = driver.find_elements(By.TAG_NAME, "a")
-                    place_links = [link for link in all_links if link.get_attribute('href') and '/bizes/place/' in link.get_attribute('href')]
+                    print(f"📋 Total <a> links found: {len(all_links)}")
                     
-                    if len(place_links) > 0:
-                        print(f"✅ Content loaded! Found {len(place_links)} place links")
-                        content_loaded = True
-                        break
-                    else:
-                        print(f"⏳ Still loading... ({int(time.time() - start_time)}s elapsed)")
-                        time.sleep(1)  # 🚀 Reduced from 2s to 1s
-                except:
-                    time.sleep(1)
-            
-            if not content_loaded:
-                print("⚠️ Timeout waiting for content to load - trying alternative method")
-            
-            current_url = driver.current_url
-            print(f"🔗 Current URL: {current_url}")
-            
-            # Check if logged in
-            if 'nid.naver.com' in current_url or 'login' in current_url.lower():
-                print("❌ Not logged in")
-                raise HTTPException(status_code=401, detail="Not logged in")
-            
-            # Take screenshot for debugging
-            screenshot_path = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.png")
-            driver.save_screenshot(screenshot_path)
-            print(f"📸 Screenshot saved: {screenshot_path}")
-            
-            # Save page source for debugging
-            page_source = driver.page_source
-            page_source_file = os.path.join(settings.data_dir, "naver_sessions", "bizes_list.html")
-            with open(page_source_file, 'w', encoding='utf-8') as f:
-                f.write(page_source)
-            print(f"📄 Page source saved: {page_source_file}")
-            
-            places = []
-            
-            # Method 1: Try to find place links in <a> tags
-            try:
-                all_links = driver.find_elements(By.TAG_NAME, "a")
-                print(f"📋 Total <a> links found: {len(all_links)}")
+                    place_ids_found = set()
+                    
+                    for link in all_links:
+                        href = link.get_attribute('href')
+                        if href and '/bizes/place/' in href:
+                            # Extract place_id from URL
+                            import re
+                            match = re.search(r'/bizes/place/(\d+)', href)
+                            if match:
+                                place_id = match.group(1)
+                                if place_id not in place_ids_found:
+                                    place_ids_found.add(place_id)
+                                    
+                                    # Try to get place name from link text or nearby element
+                                    place_name = link.text.strip()
+                                    if not place_name:
+                                        # Try parent element
+                                        try:
+                                            parent = link.find_element(By.XPATH, '..')
+                                            place_name = parent.text.strip()
+                                        except:
+                                            place_name = f"매장 {place_id}"
+                                    
+                                    places.append({
+                                        'place_id': place_id,
+                                        'name': place_name,
+                                        'url': f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews'
+                                    })
+                                    print(f"✅ Found place from link: {place_name} (ID: {place_id})")
+                    
+                except Exception as e:
+                    print(f"⚠️ Error extracting places from links: {e}")
+                    logger.error(f"Error extracting places from links: {e}")
                 
-                place_ids_found = set()
-                
-                for link in all_links:
-                    href = link.get_attribute('href')
-                    if href and '/bizes/place/' in href:
-                        # Extract place_id from URL
+                # Method 2: Extract place IDs from page source using regex
+                if len(places) == 0:
+                    print("🔍 No places found in links - trying regex extraction from page source...")
+                    try:
                         import re
-                        match = re.search(r'/bizes/place/(\d+)', href)
-                        if match:
+                        # Look for place IDs in the page source
+                        place_id_pattern = r'/bizes/place/(\d+)'
+                        matches = re.finditer(place_id_pattern, page_source)
+                        
+                        place_ids_found = set()
+                        for match in matches:
                             place_id = match.group(1)
                             if place_id not in place_ids_found:
                                 place_ids_found.add(place_id)
-                                
-                                # Try to get place name from link text or nearby element
-                                place_name = link.text.strip()
-                                if not place_name:
-                                    # Try parent element
-                                    try:
-                                        parent = link.find_element(By.XPATH, '..')
-                                        place_name = parent.text.strip()
-                                    except:
-                                        place_name = f"매장 {place_id}"
-                                
-                                places.append({
-                                    'place_id': place_id,
-                                    'name': place_name,
-                                    'url': f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews'
-                                })
-                                print(f"✅ Found place from link: {place_name} (ID: {place_id})")
-                
-            except Exception as e:
-                print(f"⚠️ Error extracting places from links: {e}")
-                logger.error(f"Error extracting places from links: {e}")
-            
-            # Method 2: Extract place IDs from page source using regex
-            if len(places) == 0:
-                print("🔍 No places found in links - trying regex extraction from page source...")
-                try:
-                    import re
-                    # Look for place IDs in the page source
-                    place_id_pattern = r'/bizes/place/(\d+)'
-                    matches = re.finditer(place_id_pattern, page_source)
-                    
-                    place_ids_found = set()
-                    for match in matches:
-                        place_id = match.group(1)
-                        if place_id not in place_ids_found:
-                            place_ids_found.add(place_id)
-                            print(f"✅ Found place ID in page source: {place_id}")
-                    
-                    # For each place ID, try to find the business name
-                    for place_id in place_ids_found:
-                        # Try to find business name near the place ID in the source
-                        # Look for patterns like: "businessName":"..." near the place ID
-                        name_pattern = rf'place/{place_id}[^{{}}]*?"businessName":"([^"]+)"'
-                        name_match = re.search(name_pattern, page_source)
+                                print(f"✅ Found place ID in page source: {place_id}")
                         
-                        if name_match:
-                            place_name = name_match.group(1)
-                        else:
-                            # Alternative: look for any Korean text near place ID
-                            context_pattern = rf'place/{place_id}[^<>]{{0,200}}>([가-힣\s]+)<'
-                            context_match = re.search(context_pattern, page_source)
-                            if context_match:
-                                place_name = context_match.group(1).strip()
+                        # For each place ID, try to find the business name
+                        for place_id in place_ids_found:
+                            # Try to find business name near the place ID in the source
+                            # Look for patterns like: "businessName":"..." near the place ID
+                            name_pattern = rf'place/{place_id}[^{{}}]*?"businessName":"([^"]+)"'
+                            name_match = re.search(name_pattern, page_source)
+                            
+                            if name_match:
+                                place_name = name_match.group(1)
                             else:
-                                place_name = f"매장 {place_id}"
-                        
-                        places.append({
-                            'place_id': place_id,
-                            'name': place_name,
-                            'url': f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews'
-                        })
-                        print(f"✅ Extracted place: {place_name} (ID: {place_id})")
-                
-                except Exception as e:
-                    print(f"⚠️ Error extracting places from page source: {e}")
-                    logger.error(f"Error extracting places from page source: {e}")
+                                # Alternative: look for any Korean text near place ID
+                                context_pattern = rf'place/{place_id}[^<>]{{0,200}}>([가-힣\s]+)<'
+                                context_match = re.search(context_pattern, page_source)
+                                if context_match:
+                                    place_name = context_match.group(1).strip()
+                                else:
+                                    place_name = f"매장 {place_id}"
+                            
+                            places.append({
+                                'place_id': place_id,
+                                'name': place_name,
+                                'url': f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews'
+                            })
+                            print(f"✅ Extracted place: {place_name} (ID: {place_id})")
+                    
+                    except Exception as e:
+                        print(f"⚠️ Error extracting places from page source: {e}")
+                        logger.error(f"Error extracting places from page source: {e}")
                 
                 print(f"📊 Total places found: {len(places)}")
                 logger.info(f"✅ Found {len(places)} places")
@@ -752,10 +765,10 @@ class NaverPlaceAutomationSelenium:
                 print(f"❌ Error getting places: {e}")
                 logger.error(f"Error getting places: {e}")
                 raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
-            
-        finally:
-            if driver:
-                driver.quit()
+                
+            finally:
+                if driver:
+                    driver.quit()
     
     def get_reviews(self, place_id: str, page: int = 1, page_size: int = 20, filter_type: str = 'all', load_count: int = 300) -> List[Dict]:
         """Get reviews for a place from Smartplace Center (BATCH LOADING + CACHE)
