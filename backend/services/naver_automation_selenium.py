@@ -930,8 +930,12 @@ class NaverPlaceAutomationSelenium:
                     else:
                         no_change += 1
                     
-                    if current_count >= TARGET_LOAD_COUNT:
-                        print(f"  ✅ Reached target {TARGET_LOAD_COUNT}!")
+                    # 🔧 FIX: 필터링 고려해서 2배 더 로드
+                    # (익명, 가이드 등이 제거되어 실제로는 약 50-60%만 남음)
+                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 2.0)
+                    if current_count >= ADJUSTED_TARGET:
+                        print(f"  ✅ Reached adjusted target {ADJUSTED_TARGET} (raw count, before filtering)")
+                        print(f"     Expected after filtering: ~{TARGET_LOAD_COUNT} reviews")
                         break
                         
                     if no_change >= 5:
@@ -951,9 +955,18 @@ class NaverPlaceAutomationSelenium:
                     break
             
             # 🚀 STEP 4: Parse Data
-            print("🔍 Parsing reviews...")
+            print(f"🔍 Parsing {last_count} <li> elements...")
             self._loading_progress[place_id]['message'] = f'📝 {last_count}개 리뷰 파싱 중...'
             all_reviews = []
+            
+            # 🔧 DEBUG: 스킵 카운터
+            skip_reasons = {
+                'no_author': 0,
+                'anonymous': 0,
+                'guide': 0,
+                'guide_message': 0,
+                'parse_error': 0
+            }
             
             # Get total count first
             total_count = 0
@@ -972,6 +985,7 @@ class NaverPlaceAutomationSelenium:
                     try:
                         author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
                     except:
+                        skip_reasons['no_author'] += 1
                         continue # Skip if no author structure
                         
                     # Date
@@ -998,11 +1012,20 @@ class NaverPlaceAutomationSelenium:
                         content = "" # Allow empty content (Issue #1 fix)
 
                     # Filter: Valid Author?
-                    if not author or author == "익명": continue
-                    if "가이드" in author: continue
+                    if not author:
+                        skip_reasons['no_author'] += 1
+                        continue
+                    if author == "익명":
+                        skip_reasons['anonymous'] += 1
+                        continue
+                    if "가이드" in author:
+                        skip_reasons['guide'] += 1
+                        continue
                     
                     # Filter: Guide message in content?
-                    if "답글 잘 다는 방법" in content: continue
+                    if "답글 잘 다는 방법" in content:
+                        skip_reasons['guide_message'] += 1
+                        continue
 
                     # Reply
                     reply_text = None
@@ -1037,8 +1060,19 @@ class NaverPlaceAutomationSelenium:
                         'reply_date': reply_date
                     })
                     
-                except: continue
+                except Exception as parse_err:
+                    skip_reasons['parse_error'] += 1
+                    continue
 
+            # 🔧 DEBUG: 스킵 통계 출력
+            total_skipped = sum(skip_reasons.values())
+            print(f"📊 Parsing complete: {len(all_reviews)} valid reviews, {total_skipped} skipped")
+            if total_skipped > 0:
+                print(f"   Skip breakdown:")
+                for reason, count in skip_reasons.items():
+                    if count > 0:
+                        print(f"      - {reason}: {count}")
+            
             # 🚀 MERGE with existing cache if expanding
             if existing_reviews:
                 print(f"🔗 Merging {len(all_reviews)} new reviews with {len(existing_reviews)} existing...")
@@ -1075,6 +1109,13 @@ class NaverPlaceAutomationSelenium:
                 print(f"✅ Sorted {len(unique_reviews)} reviews by date (newest first)")
             except Exception as e:
                 print(f"⚠️ Sort warning: {e}")
+            
+            # 🔧 FIX: 필터링 후 개수 확인 및 경고
+            if len(unique_reviews) < TARGET_LOAD_COUNT:
+                shortage = TARGET_LOAD_COUNT - len(unique_reviews)
+                print(f"⚠️ WARNING: Requested {TARGET_LOAD_COUNT} reviews, but only {len(unique_reviews)} valid reviews found after filtering!")
+                print(f"   Missing: {shortage} reviews (likely filtered out as 익명/가이드)")
+                logger.warning(f"Review shortage: Requested {TARGET_LOAD_COUNT}, got {len(unique_reviews)}")
             
             # 🚀 STEP 5: Update Cache (Specific to filter)
             self._reviews_cache[cache_key] = {
