@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # Naver Settings (Stage 2)
     naver_rate_limit_delay: int = 3
     
+    # Naver OAuth (Session auto-creation)
+    naver_client_id: Optional[str] = None
+    naver_client_secret: Optional[str] = None
+    naver_oauth_callback_url: str = "http://localhost:8000/api/naver/oauth/callback"
+    
     # Mock Data Settings
     use_mock_data: bool = False  # Set to False when real API is available
     use_mock_gbp: bool = True  # GBP Mock (quota issue)

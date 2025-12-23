@@ -16,6 +16,25 @@ export default function NaverLogin() {
   // Check all sessions
   useEffect(() => {
     loadSessions()
+    
+    // OAuth callback 처리
+    const urlParams = new URLSearchParams(window.location.search)
+    const success = urlParams.get('success')
+    const error = urlParams.get('error')
+    
+    if (success === 'true') {
+      // OAuth 로그인 성공!
+      setTimeout(() => {
+        loadSessions()  // 세션 목록 새로고침
+      }, 1000)
+      
+      // URL에서 파라미터 제거
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (error) {
+      setError(`OAuth 로그인 실패: ${decodeURIComponent(error)}`)
+      // URL에서 파라미터 제거
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
   }, [])
   
   // 🚀 페이지가 보일 때마다 localStorage 동기화
@@ -149,6 +168,24 @@ export default function NaverLogin() {
       alert(`❌ ${errorMsg}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleOAuthLogin = async () => {
+    try {
+      const googleEmail = localStorage.getItem('google_email')
+      
+      // OAuth URL 요청
+      const response = await apiClient.get('/api/naver/oauth/login', {
+        params: { google_email: googleEmail }
+      })
+      
+      // OAuth 페이지로 리다이렉트
+      window.location.href = response.data.oauth_url
+      
+    } catch (err) {
+      console.error('OAuth login error:', err)
+      setError(err.response?.data?.detail || 'OAuth 로그인 시작 실패')
     }
   }
 
@@ -311,9 +348,51 @@ export default function NaverLogin() {
           </div>
         )}
 
+        {/* OAuth Login Section (NEW!) */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900">🚀 간편 로그인 (추천!)</h3>
+            <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded">NEW</span>
+          </div>
+          
+          <p className="text-sm text-gray-700 mb-4">
+            네이버 계정으로 바로 로그인하세요. EXE 다운로드 없이 웹에서 바로 완료됩니다!
+          </p>
+          
+          <div className="bg-white rounded-lg p-4 mb-4 space-y-2 text-sm text-gray-600">
+            <div className="flex items-start">
+              <span className="font-bold text-green-600 mr-2">✓</span>
+              <span>EXE 다운로드 불필요 - 웹에서 바로 로그인</span>
+            </div>
+            <div className="flex items-start">
+              <span className="font-bold text-green-600 mr-2">✓</span>
+              <span>자동 갱신 - 세션 만료 걱정 없음</span>
+            </div>
+            <div className="flex items-start">
+              <span className="font-bold text-green-600 mr-2">✓</span>
+              <span>모든 플랫폼 지원 - Windows/Mac/Linux</span>
+            </div>
+          </div>
+          
+          <button
+            onClick={handleOAuthLogin}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all transform hover:scale-105 shadow-lg"
+          >
+            <CheckCircle className="w-6 h-6" />
+            <span>네이버로 로그인하기</span>
+          </button>
+          
+          <p className="text-xs text-gray-500 mt-3 text-center">
+            OAuth 2.0 인증 | 안전하고 빠름 | 2단계 인증 필요
+          </p>
+        </div>
+
         {/* Download Tool Section */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">💻 세션 생성 도구</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900">💻 세션 생성 도구</h3>
+            <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-0.5 rounded">기존 방식</span>
+          </div>
           <p className="text-sm text-gray-700 mb-4">
             Windows PC에서 실행하는 간단한 프로그램입니다. 자동으로 네이버 로그인 후 세션을 생성합니다.
           </p>
