@@ -566,11 +566,25 @@ class NaverPlaceAutomationSelenium:
                     logger.info(f"🔄 Cache expired for user {current_user_id}, refreshing...")
             
             driver = None
+            driver_is_persistent = False
+            
             try:
                 # current_user_id는 위에서 이미 선언됨 (Lock 내부)
                 print(f"📍 Getting places from Smartplace Center for user: {current_user_id}")
                 logger.info(f"📍 Getting places for user: {current_user_id}")
-                driver = self._create_driver(headless=True, user_id=current_user_id)
+                
+                # 🚀 PERSISTENT BROWSER: 먼저 기존 브라우저 확인
+                from services.persistent_browser_manager import browser_manager
+                
+                driver = browser_manager.get_browser(current_user_id)
+                
+                if driver:
+                    print(f"♻️ Reusing persistent browser for {current_user_id}")
+                    driver_is_persistent = True
+                else:
+                    print(f"🆕 Creating new browser for {current_user_id} (no persistent browser)")
+                    driver = self._create_driver(headless=True, user_id=current_user_id)
+                    driver_is_persistent = False
                 
                 # Go to business list page
                 print("🏠 Accessing Smartplace business list...")
@@ -767,8 +781,12 @@ class NaverPlaceAutomationSelenium:
                 raise HTTPException(status_code=500, detail=f"Error getting places: {str(e)}")
                 
             finally:
-                if driver:
+                # 🚀 PERSISTENT BROWSER: persistent browser는 닫지 않음!
+                if driver and not driver_is_persistent:
                     driver.quit()
+                    print("🔒 Closed temporary browser")
+                elif driver and driver_is_persistent:
+                    print("♻️ Keeping persistent browser alive")
     
     def get_reviews(self, place_id: str, page: int = 1, page_size: int = 20, filter_type: str = 'all', load_count: int = 300) -> List[Dict]:
         """Get reviews for a place from Smartplace Center (BATCH LOADING + CACHE)
@@ -845,9 +863,12 @@ class NaverPlaceAutomationSelenium:
         TARGET_LOAD_COUNT = load_count
         
         driver = None
+        driver_is_persistent = False
+        current_user_id = self.active_user_id  # race condition 방지
+        
         try:
             # 🚀 CRITICAL: Initialize progress tracking BEFORE anything
-            print(f"🔄 Initializing progress tracking for {place_id}")
+            print(f"🔄 Initializing progress tracking for {place_id}, user: {current_user_id}")
             self._loading_progress[place_id] = {
                 'status': 'loading',
                 'count': 0,
@@ -856,7 +877,18 @@ class NaverPlaceAutomationSelenium:
             }
             logger.info(f"Progress initialized: {self._loading_progress[place_id]}")
             
-            driver = self._create_driver(headless=True)
+            # 🚀 PERSISTENT BROWSER: 먼저 기존 브라우저 확인
+            from services.persistent_browser_manager import browser_manager
+            
+            driver = browser_manager.get_browser(current_user_id)
+            
+            if driver:
+                print(f"♻️ Reusing persistent browser for {current_user_id}")
+                driver_is_persistent = True
+            else:
+                print(f"🆕 Creating new browser for {current_user_id} (no persistent browser)")
+                driver = self._create_driver(headless=True, user_id=current_user_id)
+                driver_is_persistent = False
             
             # Update progress
             self._loading_progress[place_id]['message'] = '🔐 세션 로딩 중...'
@@ -1153,8 +1185,12 @@ class NaverPlaceAutomationSelenium:
             raise HTTPException(status_code=500, detail=str(e))
         
         finally:
-            if driver:
+            # 🚀 PERSISTENT BROWSER: persistent browser는 닫지 않음!
+            if driver and not driver_is_persistent:
                 driver.quit()
+                print("🔒 Closed temporary browser")
+            elif driver and driver_is_persistent:
+                print("♻️ Keeping persistent browser alive")
     
     def post_reply_by_composite(self, place_id: str, author: str, date: str, content: str, reply_text: str, user_id: str = None, expected_count: int = 50) -> Dict:
         """
@@ -1169,11 +1205,24 @@ class NaverPlaceAutomationSelenium:
         current_user_id = self.active_user_id
         
         driver = None
+        driver_is_persistent = False
+        
         try:
             print(f"💬 Posting reply to: {author} ({date}) for user: {current_user_id}")
             print(f"🎯 Target: {expected_count} reviews to render")
             
-            driver = self._create_driver(headless=True, user_id=current_user_id)
+            # 🚀 PERSISTENT BROWSER: 먼저 기존 브라우저 확인
+            from services.persistent_browser_manager import browser_manager
+            
+            driver = browser_manager.get_browser(current_user_id)
+            
+            if driver:
+                print(f"♻️ Reusing persistent browser for {current_user_id}")
+                driver_is_persistent = True
+            else:
+                print(f"🆕 Creating new browser for {current_user_id} (no persistent browser)")
+                driver = self._create_driver(headless=True, user_id=current_user_id)
+                driver_is_persistent = False
             
             # Go to reviews page with "미등록" filter (hasReply=false)
             # 🚀 URL 파라미터로 미답글 리뷰만 필터링 (UI 조작보다 훨씬 안정적!)
@@ -1667,25 +1716,39 @@ class NaverPlaceAutomationSelenium:
             raise HTTPException(status_code=500, detail=f"Error posting reply: {error_msg}")
         
         finally:
-            if driver:
+            # 🚀 PERSISTENT BROWSER: persistent browser는 닫지 않음!
+            if driver and not driver_is_persistent:
                 try:
-                    print("🔄 Closing Chrome driver...")
+                    print("🔄 Closing temporary browser...")
                     driver.quit()
-                    print("✅ Chrome driver closed")
-                    driver = None
+                    print("✅ Temporary browser closed")
                 except Exception as e:
                     print(f"⚠️ Error closing driver: {e}")
-                finally:
-                    driver = None
+            elif driver and driver_is_persistent:
+                print("♻️ Keeping persistent browser alive")
     
     def post_reply(self, place_id: str, review_id: str, reply_text: str) -> Dict:
         """Post a reply to a review in Smartplace Center"""
         driver = None
+        driver_is_persistent = False
+        current_user_id = self.active_user_id
+        
         try:
-            print(f"💬 Posting reply to review: {review_id}")
+            print(f"💬 Posting reply to review: {review_id} for user: {current_user_id}")
             logger.info(f"💬 Posting reply to review: {review_id}")
             
-            driver = self._create_driver(headless=True)
+            # 🚀 PERSISTENT BROWSER: 먼저 기존 브라우저 확인
+            from services.persistent_browser_manager import browser_manager
+            
+            driver = browser_manager.get_browser(current_user_id)
+            
+            if driver:
+                print(f"♻️ Reusing persistent browser for {current_user_id}")
+                driver_is_persistent = True
+            else:
+                print(f"🆕 Creating new browser for {current_user_id} (no persistent browser)")
+                driver = self._create_driver(headless=True, user_id=current_user_id)
+                driver_is_persistent = False
             
             # Go to Smartplace reviews page (NOT mobile version)
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
@@ -1824,8 +1887,12 @@ class NaverPlaceAutomationSelenium:
             raise HTTPException(status_code=500, detail=f"Error posting reply: {error_msg}")
         
         finally:
-            if driver:
+            # 🚀 PERSISTENT BROWSER: persistent browser는 닫지 않음!
+            if driver and not driver_is_persistent:
                 driver.quit()
+                print("🔒 Closed temporary browser")
+            elif driver and driver_is_persistent:
+                print("♻️ Keeping persistent browser alive")
     
     def get_loading_progress(self, place_id: str) -> Dict:
         """Get current loading progress for a place"""
@@ -1844,15 +1911,25 @@ class NaverPlaceAutomationSelenium:
     def logout(self) -> Dict:
         """Logout and clear session"""
         try:
+            current_user_id = self.active_user_id
+            
             if os.path.exists(self.session_file):
                 os.remove(self.session_file)
             
-            # 🚀 Clear cache on logout
-            self._places_cache = None
-            self._places_cache_time = None
+            # 🚀 PERSISTENT BROWSER: 브라우저 종료
+            from services.persistent_browser_manager import browser_manager
+            browser_manager.remove_browser(current_user_id)
+            print(f"🗑️ Persistent browser removed for {current_user_id}")
+            
+            # 🚀 Clear cache on logout (user별로 클리어!)
+            if current_user_id in self._places_cache:
+                del self._places_cache[current_user_id]
+            if current_user_id in self._places_cache_time:
+                del self._places_cache_time[current_user_id]
+            # Reviews cache는 place_id별로 관리되므로 전체 클리어 (추후 개선 가능)
             self._reviews_cache = {}  # Clear reviews cache too
             self._loading_progress = {}  # Clear progress too
-            print("🗑️ Cache cleared on logout")
+            print(f"🗑️ Cache cleared for user {current_user_id}")
             
             return {
                 'success': True,

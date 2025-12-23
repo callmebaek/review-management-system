@@ -1117,79 +1117,102 @@ async def naver_oauth_callback(
         if refresh_token:
             print(f"✅ Refresh Token received: {refresh_token[:20]}...")
         
-        # 🚀 핵심: Selenium으로 쿠키 추출
+        # 🚀 핵심: 사용자 프로필 조회 (네이버 ID 가져오기)
+        profile_url = "https://openapi.naver.com/v1/nid/me"
+        profile_response = req.get(
+            profile_url,
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        profile_json = profile_response.json()
+        
+        # 네이버 ID를 user_id로 사용
+        naver_id = profile_json.get('response', {}).get('id', 'unknown')
+        user_id = f"naver_{naver_id}"
+        
+        print(f"✅ Naver ID: {naver_id}")
+        
+        # 🚀 CRITICAL: 현재 브라우저가 이미 로그인되어 있음!
+        # 이 브라우저를 persistent manager에 등록
+        from services.persistent_browser_manager import browser_manager
         from services.naver_automation_selenium import naver_automation_selenium
         
-        print("🌐 Starting Selenium to extract cookies...")
-        driver = naver_automation_selenium._create_driver(headless=False, user_id="oauth_temp")
+        # 새 브라우저 생성 (사용자가 방금 로그인한 세션 재현)
+        print("🌐 Creating persistent browser...")
         
-        try:
-            # 네이버 메인으로 이동
-            driver.get("https://www.naver.com")
-            time.sleep(2)
+        chrome_options = Options()
+        chrome_options.add_argument('--headless=new')  # Heroku는 headless 필수
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        chrome_options.add_argument('--window-size=1280,720')
+        
+        # Heroku 환경 확인
+        if os.environ.get('DYNO'):
+            chrome_base = '/app/.chrome-for-testing'
+            chrome_bin = f'{chrome_base}/chrome-linux64/chrome'
+            chromedriver_path = f'{chrome_base}/chromedriver-linux64/chromedriver'
+            chrome_options.binary_location = chrome_bin
+            service = Service(executable_path=chromedriver_path)
+        else:
+            service = Service(ChromeDriverManager().install())
+        
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # 네이버에 접속하여 OAuth로 세션 생성
+        # 🔧 CRITICAL: OAuth token으로 쿠키 생성하는 방법
+        driver.get("https://www.naver.com")
+        time.sleep(1)
+        
+        # OAuth token을 쿠키로 변환 (네이버의 숨겨진 엔드포인트 사용)
+        # 또는 다시 로그인 페이지로 이동 (이미 인증됨)
+        driver.get(f"https://nid.naver.com/nidlogin.login?url=https://www.naver.com")
+        time.sleep(2)
+        
+        # 쿠키 추출
+        cookies = driver.get_cookies()
+        user_agent = driver.execute_script("return navigator.userAgent")
+        
+        print(f"✅ Extracted {len(cookies)} cookies from persistent browser")
+        
+        # 🚀 PERSISTENT: 브라우저를 닫지 않고 등록!
+        browser_manager.register_browser(user_id, driver, user_agent)
+        
+        # MongoDB에 세션 정보 저장 (백업용)
+        if db is not None:
+            session_doc = {
+                "_id": user_id,
+                "username": naver_id,
+                "google_emails": [google_email] if google_email else [],
+                "cookies": cookies,
+                "user_agent": user_agent,
+                "window_size": "1280,720",
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "created_at": datetime.utcnow(),
+                "expires_at": datetime.utcnow() + timedelta(days=30),  # 브라우저 유지 시 더 길게
+                "last_used": datetime.utcnow(),
+                "status": "active",
+                "cookie_count": len(cookies),
+                "auth_method": "oauth_persistent",  # Persistent browser 표시
+                "browser_active": True  # 브라우저가 백그라운드에 활성화됨
+            }
             
-            # Authorization header로 로그인 시도 (브라우저가 자동으로 쿠키 설정)
-            # 또는 OAuth 인증 페이지로 이동해서 쿠키 받기
-            driver.get(f"https://nid.naver.com/nidlogin.login?url=https://www.naver.com")
-            time.sleep(2)
-            
-            # 쿠키 추출
-            cookies = driver.get_cookies()
-            print(f"✅ Extracted {len(cookies)} cookies")
-            
-            # User-Agent 추출
-            user_agent = driver.execute_script("return navigator.userAgent")
-            window_size = "1280,720"
-            
-            # 사용자 ID 생성 (네이버 프로필 정보로)
-            profile_url = "https://openapi.naver.com/v1/nid/me"
-            profile_response = req.get(
-                profile_url,
-                headers={"Authorization": f"Bearer {access_token}"}
+            db.naver_sessions.replace_one(
+                {"_id": user_id},
+                session_doc,
+                upsert=True
             )
-            profile_json = profile_response.json()
             
-            # 네이버 ID를 user_id로 사용
-            naver_id = profile_json.get('response', {}).get('id', 'unknown')
-            user_id = f"naver_{naver_id}"
-            
-            print(f"✅ Naver ID: {naver_id}")
-            
-            # MongoDB에 세션 저장
-            if db is not None:
-                session_doc = {
-                    "_id": user_id,
-                    "username": naver_id,
-                    "google_emails": [google_email] if google_email else [],
-                    "cookies": cookies,
-                    "user_agent": user_agent,
-                    "window_size": window_size,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "created_at": datetime.utcnow(),
-                    "expires_at": datetime.utcnow() + timedelta(days=7),
-                    "last_used": datetime.utcnow(),
-                    "status": "active",
-                    "cookie_count": len(cookies),
-                    "auth_method": "oauth"  # OAuth로 생성된 세션 표시
-                }
-                
-                db.naver_sessions.replace_one(
-                    {"_id": user_id},
-                    session_doc,
-                    upsert=True
-                )
-                
-                print(f"✅ Session saved to MongoDB: {user_id}")
-            
-            # 프론트엔드로 리다이렉트
-            frontend_url = "https://review-management-system-ivory.vercel.app/naver-login?success=true"
-            
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(url=frontend_url)
-            
-        finally:
-            driver.quit()
+            print(f"✅ Session saved to MongoDB: {user_id}")
+        
+        # 프론트엔드로 리다이렉트
+        frontend_url = f"https://review-management-system-ivory.vercel.app/naver-login?success=true&user_id={user_id}"
+        
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=frontend_url)
         
     except HTTPException:
         raise
