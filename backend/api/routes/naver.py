@@ -1013,10 +1013,12 @@ async def delete_place_ai_settings_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to delete AI settings: {str(e)}")
 
 
-# ==================== OAuth Login (NEW!) ====================
+# ==================== OAuth Login (DISABLED - Not working) ====================
 
-@router.get("/oauth/login")
-async def naver_oauth_login(google_email: Optional[str] = None):
+# DISABLED: OAuth login not working properly - All routes commented out
+"""
+# @router.get("/oauth/login")
+# async def naver_oauth_login(google_email: Optional[str] = None):
     """
     네이버 OAuth 로그인 시작
     
@@ -1073,8 +1075,8 @@ async def naver_oauth_login(google_email: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"OAuth 로그인 URL 생성 실패: {str(e)}")
 
 
-@router.get("/oauth/callback")
-async def naver_oauth_callback(
+# @router.get("/oauth/callback")
+# async def naver_oauth_callback(
     code: str,
     state: str,
     error: Optional[str] = None,
@@ -1246,5 +1248,4 @@ async def naver_oauth_callback(
         error_url = f"https://review-management-system-ivory.vercel.app/naver-login?error={urllib.parse.quote(str(e))}"
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=error_url)
-
-
+"""

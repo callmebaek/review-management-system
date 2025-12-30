@@ -17,7 +17,8 @@ export default function NaverLogin() {
   useEffect(() => {
     loadSessions()
     
-    // OAuth callback 처리
+    // DISABLED: OAuth callback 처리 (not working)
+    /*
     const urlParams = new URLSearchParams(window.location.search)
     const success = urlParams.get('success')
     const error = urlParams.get('error')
@@ -35,6 +36,7 @@ export default function NaverLogin() {
       // URL에서 파라미터 제거
       window.history.replaceState({}, document.title, window.location.pathname)
     }
+    */
   }, [])
   
   // 🚀 페이지가 보일 때마다 localStorage 동기화
@@ -171,6 +173,8 @@ export default function NaverLogin() {
     }
   }
 
+  // DISABLED: OAuth login not working
+  /*
   const handleOAuthLogin = async () => {
     try {
       const googleEmail = localStorage.getItem('google_email')
@@ -188,6 +192,7 @@ export default function NaverLogin() {
       setError(err.response?.data?.detail || 'OAuth 로그인 시작 실패')
     }
   }
+  */
 
   const handleDownloadTool = () => {
     // GitHub Releases에서 다운로드 (최신 버전)
@@ -348,7 +353,8 @@ export default function NaverLogin() {
           </div>
         )}
 
-        {/* OAuth Login Section (NEW!) */}
+        {/* OAuth Login Section (DISABLED - Not working) */}
+        {/* 
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-900">🚀 간편 로그인 (추천!)</h3>
@@ -386,6 +392,7 @@ export default function NaverLogin() {
             OAuth 2.0 인증 | 안전하고 빠름 | 2단계 인증 필요
           </p>
         </div>
+        */}
 
         {/* Download Tool Section */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-6 mb-6">
