@@ -1017,39 +1017,49 @@ class NaverPlaceAutomationSelenium:
                         try:
                             sample_size = min(15, current_count)  # 처음 15개 샘플 (더 빠르게)
                             valid_count = 0
+                            total_checked = 0  # 🔧 FIX: 실제로 체크한 개수 (division by zero 방지)
                             
                             for li in lis[:sample_size]:
                                 try:
                                     author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                                    total_checked += 1  # 체크한 개수 증가
                                     if author and author != "익명" and "가이드" not in author:
                                         valid_count += 1
                                 except:
+                                    total_checked += 1  # 예외가 나도 체크한 것으로 간주
                                     pass
                             
-                            if sample_size > 0:
-                                skip_ratio = 1.0 - (valid_count / sample_size)
+                            # 🔧 FIX: total_checked가 0이 아닐 때만 계산 (division by zero 방지)
+                            if total_checked > 0:
+                                skip_ratio = 1.0 - (valid_count / total_checked)  # 🔧 total_checked 사용
                                 # 스킵 비율 기반으로 목표 재계산 (15% 여유만)
-                                if skip_ratio > 0:
+                                if skip_ratio > 0 and skip_ratio < 1.0:  # 유효한 범위 체크
                                     ADJUSTED_TARGET = int(TARGET_LOAD_COUNT / (1.0 - skip_ratio) * 1.15)  # 15% 여유
-                                    print(f"  ✅ 샘플 분석: {valid_count}/{sample_size} 유효 (스킵 비율: {skip_ratio:.1%})")
+                                    print(f"  ✅ 샘플 분석: {valid_count}/{total_checked} 유효 (스킵 비율: {skip_ratio:.1%})")
                                     print(f"  🎯 목표 조정: {INITIAL_TARGET} → {ADJUSTED_TARGET}개 (효율적!)")
                                 else:
                                     ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 1.1)  # 스킵이 거의 없으면 10%만 여유
                                     print(f"  ✅ 샘플 분석: 스킵 거의 없음, 목표: {ADJUSTED_TARGET}개")
+                            else:
+                                print(f"  ⚠️ 샘플 파싱: 체크할 수 있는 요소가 없음, 기본 목표 사용")
+                                skip_ratio = None
                             
                             sample_parsed = True
                         except Exception as e:
                             print(f"  ⚠️ 샘플 파싱 오류: {e}, 기본 목표 사용")
+                            import traceback
+                            traceback.print_exc()
                     
                     # 🚀 동적 목표 확인 (추정된 스킵 비율 반영, 매 스크롤마다 확인)
                     if skip_ratio is not None and current_count >= 10:
                         # 현재까지의 유효 리뷰 개수 추정
                         estimated_valid_count = int(current_count * (1.0 - skip_ratio))
                         
-                        # 목표에 도달했으면 조기 종료
+                        # 목표에 도달했으면 조기 종료 (시간 절약!)
                         if estimated_valid_count >= TARGET_LOAD_COUNT:
                             print(f"  ✅ 추정 유효 리뷰 {estimated_valid_count}개 도달! (목표: {TARGET_LOAD_COUNT}개)")
-                            print(f"     조기 종료로 시간 절약 (불필요한 스크롤 {ADJUSTED_TARGET - current_count}개 생략)")
+                            saved_scrolls = ADJUSTED_TARGET - current_count if ADJUSTED_TARGET > current_count else 0
+                            print(f"     조기 종료로 시간 절약 (불필요한 스크롤 약 {saved_scrolls}개 생략, 예상 시간 절약: {saved_scrolls * 0.4:.1f}초)")
                             break
                     
                     # 기존 목표 도달 확인
@@ -1058,25 +1068,60 @@ class NaverPlaceAutomationSelenium:
                         print(f"     Expected after filtering: ~{TARGET_LOAD_COUNT} reviews")
                         break
                         
-                    # 🔧 FIX: 더 많은 시도 허용 (5 → 10)
+                    # 🔧 FIX: 더 많은 시도 허용하되, 목표 미달 시 추가 시도
                     if no_change >= 10:  # 5 → 10으로 증가
                         print(f"  ⚠️ No more content loading after {no_change} attempts.")
                         # 목표 개수에 도달하지 못했지만 더 이상 로드할 것이 없으면 중단
                         if current_count < ADJUSTED_TARGET:
                             print(f"  ⚠️ Warning: Only loaded {current_count} items, target was {ADJUSTED_TARGET}")
+                            # 🔧 FIX: 목표에 도달하지 못했으면 최소한 더 시도 (시간 효율 고려)
+                            min_required = int(TARGET_LOAD_COUNT * 1.5)  # 최소 1.5배는 로드 시도
+                            if current_count < min_required and i < max_scrolls - 5:  # 마지막 5번은 제외
+                                print(f"  🔄 목표 미달 ({current_count} < {min_required}), 추가 스크롤 시도 중...")
+                                no_change = 0  # 카운터 리셋하여 더 시도
+                                time.sleep(0.3)  # 짧은 대기 후 재시도
+                                continue
                         break
                     
-                    # 🚀 FIX: Use scrollIntoView on the LAST element
-                    if lis:
-                        driver.execute_script("arguments[0].scrollIntoView(true);", lis[-1])
-                    else:
-                        driver.execute_script("window.scrollBy(0, 1000);")
+                    # 🚀 FIX: Stale element 방지 - 스크롤 전에 요소를 다시 찾기 (시간 절약)
+                    try:
+                        if lis:
+                            # 🔧 FIX: 마지막 요소를 다시 찾아서 stale element 방지
+                            all_lis_refresh = driver.find_elements(By.TAG_NAME, "li")
+                            if all_lis_refresh and len(all_lis_refresh) > 0:
+                                # 마지막 요소로 스크롤 (stale element 방지)
+                                driver.execute_script("arguments[0].scrollIntoView(true);", all_lis_refresh[-1])
+                            else:
+                                # 요소가 없으면 일반 스크롤
+                                driver.execute_script("window.scrollBy(0, 1000);")
+                        else:
+                            driver.execute_script("window.scrollBy(0, 1000);")
+                    except Exception as scroll_err:
+                        # Stale element 오류 발생 시 일반 스크롤 사용 (재시도 방지로 시간 절약)
+                        if "stale" in str(scroll_err).lower():
+                            print(f"  ⚠️ Stale element detected, using window scroll")
+                            driver.execute_script("window.scrollBy(0, 1000);")
+                        else:
+                            print(f"  ⚠️ Scroll error: {scroll_err}")
+                            # 심각한 오류가 아니면 계속 진행
+                            driver.execute_script("window.scrollBy(0, 1000);")
                         
-                    time.sleep(0.5)  # Wait for render
+                    time.sleep(0.4)  # 🔧 0.5 → 0.4초로 감소 (시간 절약)
                     
                 except Exception as e:
-                    print(f"  ⚠️ Scroll error: {e}")
-                    break
+                    error_msg = str(e)
+                    # Stale element는 재시도하지 않고 계속 진행 (시간 절약)
+                    if "stale" in error_msg.lower():
+                        print(f"  ⚠️ Stale element in loop, continuing...")
+                        try:
+                            driver.execute_script("window.scrollBy(0, 1000);")
+                            time.sleep(0.4)
+                            continue
+                        except:
+                            break
+                    else:
+                        print(f"  ⚠️ Scroll error: {e}")
+                        break
             
             # 🚀 STEP 4: Parse Data
             print(f"🔍 Parsing {last_count} <li> elements...")
