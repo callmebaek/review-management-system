@@ -923,13 +923,20 @@ class NaverPlaceAutomationSelenium:
             })
             print(f"Progress before scroll: {self._loading_progress[place_id]}")
             
-            # 🚀 STEP 3: Scroll Logic (Massive Batch Load)
+            # 🚀 STEP 3: Scroll Logic (Smart Adaptive Loading)
             print(f"📜 Smart batch loading (Target: {TARGET_LOAD_COUNT})...")
             self._loading_progress[place_id]['message'] = f'📜 스크롤 시작! (목표: {target_display})'
             print(f"Progress at scroll start: {self._loading_progress[place_id]}")
             
             last_count = 0
             no_change = 0
+            skip_ratio = None  # 스킵 비율 (동적 추정)
+            estimated_valid_count = 0  # 추정된 유효 리뷰 개수
+            sample_parsed = False  # 샘플 파싱 완료 여부
+            
+            # 🚀 최적화: 초기 목표는 보수적으로 설정 (나중에 조정)
+            INITIAL_TARGET = int(TARGET_LOAD_COUNT * 1.8)  # 2.5 → 1.8로 감소 (초기)
+            ADJUSTED_TARGET = INITIAL_TARGET
             
             # Adjust scroll attempts based on target
             max_scrolls = 50 if TARGET_LOAD_COUNT <= 50 else \
@@ -950,6 +957,8 @@ class NaverPlaceAutomationSelenium:
                         
                         # 🚀 ALWAYS update progress (every single change for real-time feel)
                         message = f'📈 {current_count}개 리뷰 로드됨...'
+                        if estimated_valid_count > 0:
+                            message += f' (추정 유효: {estimated_valid_count}개)'
                         self._loading_progress[place_id].update({
                             'status': 'loading',
                             'count': current_count,
@@ -962,9 +971,48 @@ class NaverPlaceAutomationSelenium:
                     else:
                         no_change += 1
                     
-                    # 🔧 FIX: 필터링 고려해서 2.5배 더 로드 (더 여유있게)
-                    # (익명, 가이드 등이 제거되어 실제로는 약 50-60%만 남음)
-                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 2.5)  # 2.0 → 2.5로 증가
+                    # 🚀 NEW: 샘플 파싱으로 스킵 비율 추정 (15개 이상 로드 시 1회만, 더 빠르게)
+                    if not sample_parsed and current_count >= 15:
+                        print(f"  🔍 샘플 파싱 시작 (스킵 비율 추정, {current_count}개 중)...")
+                        try:
+                            sample_size = min(15, current_count)  # 처음 15개 샘플 (더 빠르게)
+                            valid_count = 0
+                            
+                            for li in lis[:sample_size]:
+                                try:
+                                    author = li.find_element(By.CLASS_NAME, "pui__JiVbY3").text.strip()
+                                    if author and author != "익명" and "가이드" not in author:
+                                        valid_count += 1
+                                except:
+                                    pass
+                            
+                            if sample_size > 0:
+                                skip_ratio = 1.0 - (valid_count / sample_size)
+                                # 스킵 비율 기반으로 목표 재계산 (15% 여유만)
+                                if skip_ratio > 0:
+                                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT / (1.0 - skip_ratio) * 1.15)  # 15% 여유
+                                    print(f"  ✅ 샘플 분석: {valid_count}/{sample_size} 유효 (스킵 비율: {skip_ratio:.1%})")
+                                    print(f"  🎯 목표 조정: {INITIAL_TARGET} → {ADJUSTED_TARGET}개 (효율적!)")
+                                else:
+                                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 1.1)  # 스킵이 거의 없으면 10%만 여유
+                                    print(f"  ✅ 샘플 분석: 스킵 거의 없음, 목표: {ADJUSTED_TARGET}개")
+                            
+                            sample_parsed = True
+                        except Exception as e:
+                            print(f"  ⚠️ 샘플 파싱 오류: {e}, 기본 목표 사용")
+                    
+                    # 🚀 동적 목표 확인 (추정된 스킵 비율 반영, 매 스크롤마다 확인)
+                    if skip_ratio is not None and current_count >= 10:
+                        # 현재까지의 유효 리뷰 개수 추정
+                        estimated_valid_count = int(current_count * (1.0 - skip_ratio))
+                        
+                        # 목표에 도달했으면 조기 종료
+                        if estimated_valid_count >= TARGET_LOAD_COUNT:
+                            print(f"  ✅ 추정 유효 리뷰 {estimated_valid_count}개 도달! (목표: {TARGET_LOAD_COUNT}개)")
+                            print(f"     조기 종료로 시간 절약 (불필요한 스크롤 {ADJUSTED_TARGET - current_count}개 생략)")
+                            break
+                    
+                    # 기존 목표 도달 확인
                     if current_count >= ADJUSTED_TARGET:
                         print(f"  ✅ Reached adjusted target {ADJUSTED_TARGET} (raw count, before filtering)")
                         print(f"     Expected after filtering: ~{TARGET_LOAD_COUNT} reviews")
