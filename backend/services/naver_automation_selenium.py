@@ -930,13 +930,58 @@ class NaverPlaceAutomationSelenium:
                 driver = self._create_driver(headless=True, user_id=current_user_id)
                 driver_is_persistent = False
             
+            # 🔧 FIX: 세션 유효성 최종 체크 (invalid session 방지)
+            try:
+                _ = driver.window_handles  # 세션 체크
+            except Exception as session_err:
+                error_msg = str(session_err).lower()
+                if "invalid session" in error_msg or "session" in error_msg:
+                    print(f"⚠️ Invalid session detected, creating new browser...")
+                    logger.warning(f"Invalid session before get_reviews: {session_err}")
+                    # 브라우저 제거 및 재생성
+                    if driver_is_persistent:
+                        browser_manager.remove_browser(current_user_id)
+                    else:
+                        try:
+                            driver.quit()
+                        except:
+                            pass
+                    # 새 브라우저 생성
+                    driver = self._create_driver(headless=True, user_id=current_user_id)
+                    driver_is_persistent = False
+                    print(f"✅ New browser created after session error")
+            
             # Update progress
             self._loading_progress[place_id]['message'] = '🔐 세션 로딩 중...'
             print(f"Progress: {self._loading_progress[place_id]['message']}")
             reviews_url = f'https://new.smartplace.naver.com/bizes/place/{place_id}/reviews?menu=visitor'
             print(f"🔗 Accessing: {reviews_url}")
             self._loading_progress[place_id]['message'] = '📄 리뷰 페이지 접속 중...'
-            driver.get(reviews_url)
+            
+            # 🔧 FIX: 세션 오류 발생 시 재시도
+            max_retries = 2
+            for retry in range(max_retries):
+                try:
+                    driver.get(reviews_url)
+                    break  # 성공하면 루프 종료
+                except Exception as get_err:
+                    error_msg = str(get_err).lower()
+                    if ("invalid session" in error_msg or "session" in error_msg) and retry < max_retries - 1:
+                        print(f"⚠️ Session error during get(), retrying ({retry + 1}/{max_retries})...")
+                        logger.warning(f"Session error during get(): {get_err}")
+                        # 브라우저 재생성
+                        if driver_is_persistent:
+                            browser_manager.remove_browser(current_user_id)
+                        else:
+                            try:
+                                driver.quit()
+                            except:
+                                pass
+                        driver = self._create_driver(headless=True, user_id=current_user_id)
+                        driver_is_persistent = False
+                        time.sleep(1)  # 잠시 대기
+                    else:
+                        raise  # 재시도 불가능하면 예외 발생
             
             print("⏳ Waiting for reviews page to load...")
             self._loading_progress[place_id]['message'] = '⏳ 페이지 로딩 중...'
@@ -988,6 +1033,41 @@ class NaverPlaceAutomationSelenium:
             
             for i in range(max_scrolls):
                 try:
+                    # 🔧 FIX: 스크롤 중 세션 체크 (invalid session 방지)
+                    try:
+                        _ = driver.window_handles  # 세션 체크
+                    except Exception as session_check_err:
+                        error_msg = str(session_check_err).lower()
+                        if "invalid session" in error_msg or "session" in error_msg:
+                            print(f"⚠️ Invalid session detected during scroll, recreating browser...")
+                            logger.warning(f"Invalid session during scroll: {session_check_err}")
+                            # 브라우저 재생성
+                            if driver_is_persistent:
+                                browser_manager.remove_browser(current_user_id)
+                            else:
+                                try:
+                                    driver.quit()
+                                except:
+                                    pass
+                            driver = self._create_driver(headless=True, user_id=current_user_id)
+                            driver_is_persistent = False
+                            # 페이지 다시 로드
+                            driver.get(reviews_url)
+                            time.sleep(2)
+                            # 팝업 처리
+                            try:
+                                popup_btn = driver.find_element(By.CSS_SELECTOR, "button.Modal_btn_confirm__uQZFR")
+                                if popup_btn.is_displayed():
+                                    driver.execute_script("arguments[0].click();", popup_btn)
+                                    time.sleep(1)
+                            except:
+                                pass
+                            print(f"✅ Browser recreated, continuing scroll...")
+                            # 스크롤 카운터 리셋
+                            last_count = 0
+                            no_change = 0
+                            continue
+                    
                     lis = driver.find_elements(By.TAG_NAME, "li")
                     current_count = len(lis)
                     

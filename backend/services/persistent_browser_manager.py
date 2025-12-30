@@ -101,10 +101,13 @@ class PersistentBrowserManager:
             if user_id in self._browsers:
                 browser_info = self._browsers[user_id]
                 
-                # 브라우저가 살아있는지 확인
+                # 브라우저가 살아있는지 확인 (더 강력한 체크)
                 try:
-                    # Ping test
-                    browser_info['driver'].current_url
+                    driver = browser_info['driver']
+                    # 🔧 FIX: 더 강력한 세션 체크 (window_handles 사용)
+                    # current_url만으로는 invalid session을 감지 못할 수 있음
+                    _ = driver.window_handles  # 세션 유효성 체크
+                    _ = driver.current_url  # 추가 체크
                     
                     # 마지막 사용 시간 업데이트
                     browser_info['last_used'] = datetime.now()
@@ -112,11 +115,24 @@ class PersistentBrowserManager:
                     logger.info(f"♻️ Reusing browser for user: {user_id}")
                     print(f"♻️ Reusing persistent browser for user: {user_id}")
                     
-                    return browser_info['driver']
-                except:
-                    # 브라우저가 죽었으면 제거
-                    logger.warning(f"💀 Browser dead for user: {user_id}")
-                    print(f"💀 Browser dead for user: {user_id}, removing...")
+                    return driver
+                except Exception as e:
+                    # 브라우저가 죽었으면 제거 (invalid session 포함)
+                    error_msg = str(e).lower()
+                    if "invalid session" in error_msg or "session" in error_msg:
+                        logger.warning(f"💀 Invalid session for user: {user_id} - {e}")
+                        print(f"💀 Invalid session detected for user: {user_id}, removing...")
+                    else:
+                        logger.warning(f"💀 Browser dead for user: {user_id} - {e}")
+                        print(f"💀 Browser dead for user: {user_id}, removing...")
+                    
+                    # 브라우저 제거
+                    try:
+                        driver = browser_info['driver']
+                        driver.quit()
+                    except:
+                        pass
+                    
                     del self._browsers[user_id]
                     return None
             
