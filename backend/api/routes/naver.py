@@ -8,6 +8,7 @@ import threading
 import queue
 import time
 import os
+import asyncio
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -500,20 +501,35 @@ async def upload_session(
     try:
         from utils.db import get_db
         
+        # 🔧 FIX: Heroku Cold Start 대비 - MongoDB 연결 재시도
+        max_db_retries = 3
+        db = None
+        for retry in range(max_db_retries):
+            try:
+                if not settings.use_mongodb or not settings.mongodb_url:
+                    raise HTTPException(
+                        status_code=500, 
+                        detail="MongoDB not configured. Session upload requires MongoDB."
+                    )
+                
+                db = get_db()
+                if db is None:
+                    if retry < max_db_retries - 1:
+                        print(f"⚠️ Database connection failed, retrying... ({retry + 1}/{max_db_retries})")
+                        await asyncio.sleep(1)  # 1초 대기 후 재시도
+                        continue
+                    raise HTTPException(status_code=503, detail="Database connection failed after retries")
+                break
+            except Exception as e:
+                if retry < max_db_retries - 1:
+                    print(f"⚠️ Database error, retrying... ({retry + 1}/{max_db_retries}): {e}")
+                    await asyncio.sleep(1)
+                    continue
+                raise HTTPException(status_code=503, detail=f"Database error: {str(e)}")
+        
         # Validate cookies
         if not session_data.cookies or len(session_data.cookies) == 0:
             raise HTTPException(status_code=400, detail="No cookies provided")
-        
-        # Check if MongoDB is available
-        if not settings.use_mongodb or not settings.mongodb_url:
-            raise HTTPException(
-                status_code=500, 
-                detail="MongoDB not configured. Session upload requires MongoDB."
-            )
-        
-        db = get_db()
-        if db is None:
-            raise HTTPException(status_code=500, detail="Database connection failed")
         
         # 🚀 Google 계정 연결 (다대다 - 여러 계정이 같은 세션 사용 가능)
         if not google_email:
@@ -521,6 +537,49 @@ async def upload_session(
         
         # 쉼표로 구분된 이메일을 배열로 변환
         new_emails = [e.strip() for e in google_email.split(",") if e.strip()]
+        
+        # 🔧 FIX: 실제 쿠키 만료 시간 확인 (가장 긴 만료 시간 사용)
+        max_expiry = None
+        critical_cookies = ['NID_AUT', 'NID_SES', 'NID_JKL']  # 네이버 핵심 쿠키
+        
+        for cookie in session_data.cookies:
+            # expiry가 있으면 확인 (Unix timestamp)
+            if 'expiry' in cookie and cookie['expiry']:
+                expiry_timestamp = cookie['expiry']
+                if isinstance(expiry_timestamp, (int, float)):
+                    # fromtimestamp는 naive datetime 반환 (UTC 기준)
+                    expiry_dt = datetime.utcfromtimestamp(expiry_timestamp)
+                    if max_expiry is None or expiry_dt > max_expiry:
+                        max_expiry = expiry_dt
+                        # 핵심 쿠키면 로그 출력
+                        if cookie.get('name') in critical_cookies:
+                            print(f"🔑 Critical cookie '{cookie.get('name')}' expires at: {expiry_dt}")
+        
+        # 만료 시간 설정 (실제 쿠키 만료 시간 또는 기본 7일)
+        now_utc = datetime.utcnow()
+        
+        if max_expiry:
+            # max_expiry는 이미 UTC naive datetime
+            expires_at = max_expiry
+            
+            # 최소 1일, 최대 30일로 제한 (너무 짧거나 길면 조정)
+            min_expiry = now_utc + timedelta(days=1)
+            max_allowed = now_utc + timedelta(days=30)
+            
+            if expires_at < min_expiry:
+                expires_at = min_expiry
+                print(f"⚠️ Cookie expiry too short, using minimum 1 day")
+            elif expires_at > max_allowed:
+                expires_at = max_allowed
+                print(f"⚠️ Cookie expiry too long, using maximum 30 days")
+            
+            valid_days = (expires_at - now_utc).days
+            print(f"✅ Using cookie expiry: {expires_at} ({valid_days} days)")
+        else:
+            # 쿠키 만료 시간이 없으면 기본 7일
+            expires_at = now_utc + timedelta(days=7)
+            valid_days = 7
+            print(f"⚠️ No cookie expiry found, using default 7 days")
         
         # 기존 세션 확인
         existing_session = db.naver_sessions.find_one({"_id": session_data.user_id})
@@ -539,7 +598,7 @@ async def upload_session(
                 "google_emails": google_emails,  # 배열!
                 "cookies": session_data.cookies,
                 "created_at": existing_session.get("created_at", datetime.utcnow()),
-                "expires_at": datetime.utcnow() + timedelta(days=7),
+                "expires_at": expires_at,  # 🔧 실제 쿠키 만료 시간 사용
                 "last_used": datetime.utcnow(),
                 "status": "active",
                 "cookie_count": len(session_data.cookies)
@@ -552,20 +611,33 @@ async def upload_session(
                 "google_emails": new_emails,  # 여러 개 한번에!
                 "cookies": session_data.cookies,
                 "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(days=7),
+                "expires_at": expires_at,  # 🔧 실제 쿠키 만료 시간 사용
                 "last_used": datetime.utcnow(),
                 "status": "active",
                 "cookie_count": len(session_data.cookies)
             }
         
-        # Upsert to MongoDB
-        db.naver_sessions.replace_one(
-            {"_id": session_data.user_id},
-            session_doc,
-            upsert=True
-        )
+        # Upsert to MongoDB (재시도 로직 포함)
+        try:
+            db.naver_sessions.replace_one(
+                {"_id": session_data.user_id},
+                session_doc,
+                upsert=True
+            )
+        except Exception as db_error:
+            print(f"❌ MongoDB upsert error: {db_error}")
+            # 한 번 더 재시도
+            try:
+                await asyncio.sleep(0.5)
+                db.naver_sessions.replace_one(
+                    {"_id": session_data.user_id},
+                    session_doc,
+                    upsert=True
+                )
+            except Exception as retry_error:
+                raise HTTPException(status_code=503, detail=f"Database write failed: {str(retry_error)}")
         
-        print(f"✅ Session uploaded for user: {session_data.user_id}")
+        print(f"✅ Session uploaded for user: {session_data.user_id} (expires: {expires_at}, {valid_days} days)")
         
         return {
             "success": True,
@@ -575,13 +647,21 @@ async def upload_session(
                 "username": session_data.username,
                 "cookie_count": len(session_data.cookies),
                 "expires_at": session_doc["expires_at"].isoformat(),
-                "valid_days": 7
+                "valid_days": valid_days
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Session upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Session upload failed: {str(e)}")
+        error_msg = str(e)
+        print(f"❌ Session upload error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        # 503 오류는 서버 문제로 표시
+        if "503" in error_msg or "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+            raise HTTPException(status_code=503, detail=f"Server temporarily unavailable. Please try again in a moment.")
+        raise HTTPException(status_code=500, detail=f"Session upload failed: {error_msg}")
 
 
 @router.get("/sessions/list")

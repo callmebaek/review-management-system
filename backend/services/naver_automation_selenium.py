@@ -513,7 +513,20 @@ class NaverPlaceAutomationSelenium:
                     # 만료 시간 확인
                     expires_at = session.get('expires_at')
                     if expires_at:
+                        # 🔧 FIX: expires_at이 datetime 객체인지 확인
+                        if isinstance(expires_at, str):
+                            # 문자열이면 파싱
+                            try:
+                                # ISO 형식 파싱 (Z 제거 후 UTC로 처리)
+                                expires_at_str = expires_at.replace('Z', '')
+                                expires_at = datetime.fromisoformat(expires_at_str)
+                            except:
+                                expires_at = datetime.utcnow() + timedelta(days=7)  # 기본값
+                        
                         now = datetime.utcnow()
+                        # 타임존 정보가 없으면 naive datetime으로 비교 (둘 다 UTC)
+                        # MongoDB에서 가져온 datetime은 보통 naive이므로 그대로 비교
+                        
                         if now > expires_at:
                             print(f"⚠️ Session expired for user '{self.active_user_id}' (expired at: {expires_at})")
                             logger.warning(f"Session expired for user: {self.active_user_id}")
@@ -526,6 +539,33 @@ class NaverPlaceAutomationSelenium:
                         else:
                             remaining_days = (expires_at - now).days
                             print(f"✅ MongoDB session valid for user '{self.active_user_id}' (remaining: {remaining_days} days)")
+                    
+                    # 🔧 FIX: 쿠키 만료 시간도 확인 (더 정확한 검증)
+                    cookies = session.get('cookies', [])
+                    if cookies:
+                        # 핵심 쿠키의 만료 시간 확인
+                        critical_cookies = ['NID_AUT', 'NID_SES', 'NID_JKL']
+                        all_critical_valid = True
+                        
+                        for cookie in cookies:
+                            cookie_name = cookie.get('name', '')
+                            if cookie_name in critical_cookies:
+                                cookie_expiry = cookie.get('expiry')
+                                if cookie_expiry:
+                                    if isinstance(cookie_expiry, (int, float)):
+                                        cookie_expiry_dt = datetime.fromtimestamp(cookie_expiry)
+                                        if datetime.utcnow() > cookie_expiry_dt:
+                                            print(f"⚠️ Critical cookie '{cookie_name}' expired")
+                                            all_critical_valid = False
+                                            break
+                        
+                        if not all_critical_valid:
+                            print(f"⚠️ Some critical cookies expired for user '{self.active_user_id}'")
+                            return {
+                                'logged_in': False,
+                                'message': '세션 쿠키가 만료되었습니다. 새로운 세션을 업로드해주세요.',
+                                'expired': True
+                            }
                     
                     logger.info(f"✅ MongoDB session found for user: {self.active_user_id}")
                     print(f"✅ MongoDB session found for user '{self.active_user_id}' - returning logged_in=True")
