@@ -199,7 +199,7 @@ async def load_reviews_async(
         try:
             # Update status to processing
             task_manager.update_task_status(task_id, 'processing')
-            task_manager.update_progress(task_id, 0, '리뷰 로딩 시작...')
+            task_manager.update_progress(task_id, 0, '리뷰 로딩 시작...', total=load_count)
             
             # 🚀 직접 selenium 함수 호출 (wrapper 우회, Lock 문제 해결)
             from services.naver_automation_selenium import naver_automation_selenium
@@ -216,13 +216,19 @@ async def load_reviews_async(
                     try:
                         # selenium에서 진행률 읽기
                         progress = naver_automation_selenium.get_loading_progress(place_id)
-                        if progress and progress.get('count', 0) > 0:
+                        if progress:
+                            # 🔧 FIX: count가 0이어도 메시지만 있어도 업데이트 (파싱 중일 수 있음)
+                            current_count = progress.get('count', 0)
+                            message = progress.get('message', '로딩 중...')
+                            
+                            # 진행률 업데이트 (total은 load_count로 설정)
                             task_manager.update_progress(
                                 task_id,
-                                progress['count'],
-                                progress.get('message', '로딩 중...')
+                                current_count,
+                                message
                             )
-                    except:
+                    except Exception as e:
+                        print(f"⚠️ Progress update error: {e}")
                         pass
                     time_module.sleep(1)  # 1초마다 업데이트
             
@@ -245,7 +251,16 @@ async def load_reviews_async(
             # Store result
             task_manager.set_result(task_id, result)
             task_manager.update_task_status(task_id, 'completed')
-            task_manager.update_progress(task_id, len(result) if isinstance(result, list) else 0, '✅ 완료!')
+            
+            # 🔧 FIX: result는 딕셔너리 {'reviews': [...], 'total': ...} 형태
+            # 실제 리뷰 개수는 result['reviews']의 길이
+            actual_count = 0
+            if isinstance(result, dict) and 'reviews' in result:
+                actual_count = len(result['reviews'])
+            elif isinstance(result, list):
+                actual_count = len(result)
+            
+            task_manager.update_progress(task_id, actual_count, f'✅ {actual_count}개 리뷰 로드 완료!')
             
         except Exception as e:
             print(f"❌ Background task {task_id} failed: {e}")

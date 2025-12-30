@@ -195,3 +195,8 @@ class PersistentBrowserManager:
 # 싱글톤 인스턴스
 browser_manager = PersistentBrowserManager()
 
+
+
+
+
+

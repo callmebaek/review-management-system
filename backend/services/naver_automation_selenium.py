@@ -962,16 +962,20 @@ class NaverPlaceAutomationSelenium:
                     else:
                         no_change += 1
                     
-                    # 🔧 FIX: 필터링 고려해서 2배 더 로드
+                    # 🔧 FIX: 필터링 고려해서 2.5배 더 로드 (더 여유있게)
                     # (익명, 가이드 등이 제거되어 실제로는 약 50-60%만 남음)
-                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 2.0)
+                    ADJUSTED_TARGET = int(TARGET_LOAD_COUNT * 2.5)  # 2.0 → 2.5로 증가
                     if current_count >= ADJUSTED_TARGET:
                         print(f"  ✅ Reached adjusted target {ADJUSTED_TARGET} (raw count, before filtering)")
                         print(f"     Expected after filtering: ~{TARGET_LOAD_COUNT} reviews")
                         break
                         
-                    if no_change >= 5:
-                        print("  ⚠️ No more content loading.")
+                    # 🔧 FIX: 더 많은 시도 허용 (5 → 10)
+                    if no_change >= 10:  # 5 → 10으로 증가
+                        print(f"  ⚠️ No more content loading after {no_change} attempts.")
+                        # 목표 개수에 도달하지 못했지만 더 이상 로드할 것이 없으면 중단
+                        if current_count < ADJUSTED_TARGET:
+                            print(f"  ⚠️ Warning: Only loaded {current_count} items, target was {ADJUSTED_TARGET}")
                         break
                     
                     # 🚀 FIX: Use scrollIntoView on the LAST element
@@ -1010,8 +1014,13 @@ class NaverPlaceAutomationSelenium:
             except: pass
             
             lis = driver.find_elements(By.TAG_NAME, "li")
+            total_li_count = len(lis)
             
-            for li in lis:
+            # 🚀 파싱 중 진행률 업데이트를 위한 카운터
+            parsed_count = 0
+            update_interval = max(1, total_li_count // 20)  # 20번 정도 업데이트
+            
+            for idx, li in enumerate(lis):
                 try:
                     # Author
                     try:
@@ -1091,6 +1100,16 @@ class NaverPlaceAutomationSelenium:
                         'reply': reply_text,
                         'reply_date': reply_date
                     })
+                    
+                    # 🚀 파싱 중 진행률 업데이트 (실제 유효한 리뷰 개수)
+                    parsed_count += 1
+                    if parsed_count % update_interval == 0 or parsed_count == 1:
+                        self._loading_progress[place_id].update({
+                            'status': 'loading',
+                            'count': parsed_count,  # 실제 파싱된 리뷰 개수
+                            'message': f'📝 {parsed_count}개 리뷰 파싱 중... ({idx+1}/{total_li_count})',
+                            'timestamp': datetime.now()
+                        })
                     
                 except Exception as parse_err:
                     skip_reasons['parse_error'] += 1

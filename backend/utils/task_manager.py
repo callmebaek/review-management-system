@@ -78,18 +78,29 @@ class TaskManager:
             )
             print(f"🔄 Task {task_id}: {status}")
     
-    def update_progress(self, task_id: str, current: int, message: str):
-        """Update task progress"""
+    def update_progress(self, task_id: str, current: int, message: str, total: Optional[int] = None):
+        """Update task progress
+        
+        Args:
+            task_id: Task ID
+            current: Current progress count
+            message: Progress message
+            total: Total count (optional, only update if provided)
+        """
         if self.collection is not None:
+            update_fields = {
+                'progress.current': current,
+                'progress.message': message,
+                'updated_at': datetime.utcnow()
+            }
+            
+            # total이 제공되면 업데이트
+            if total is not None:
+                update_fields['progress.total'] = total
+            
             self.collection.update_one(
                 {'_id': task_id},
-                {
-                    '$set': {
-                        'progress.current': current,
-                        'progress.message': message,
-                        'updated_at': datetime.utcnow()
-                    }
-                }
+                {'$set': update_fields}
             )
     
     def get_task(self, task_id: str) -> Optional[Dict]:
