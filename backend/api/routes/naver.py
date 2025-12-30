@@ -547,8 +547,21 @@ async def upload_session(
             if 'expiry' in cookie and cookie['expiry']:
                 expiry_timestamp = cookie['expiry']
                 if isinstance(expiry_timestamp, (int, float)):
-                    # fromtimestamp는 naive datetime 반환 (UTC 기준)
-                    expiry_dt = datetime.utcfromtimestamp(expiry_timestamp)
+                    # 🔧 FIX: Python 버전 호환 - UTC timestamp를 naive datetime으로 변환
+                    try:
+                        from datetime import timezone
+                        # Python 3.3+ 방식 (권장)
+                        expiry_dt = datetime.fromtimestamp(expiry_timestamp, tz=timezone.utc)
+                        # naive datetime으로 변환 (MongoDB와 호환)
+                        expiry_dt = expiry_dt.replace(tzinfo=None)
+                    except (ImportError, TypeError):
+                        # Python 3.2 이하 또는 tz 파라미터 미지원 시
+                        try:
+                            expiry_dt = datetime.utcfromtimestamp(expiry_timestamp)
+                        except AttributeError:
+                            # 최후의 수단: 로컬 시간으로 변환 후 UTC로 가정
+                            expiry_dt = datetime.fromtimestamp(expiry_timestamp)
+                    
                     if max_expiry is None or expiry_dt > max_expiry:
                         max_expiry = expiry_dt
                         # 핵심 쿠키면 로그 출력
@@ -1096,236 +1109,237 @@ async def delete_place_ai_settings_endpoint(
 # ==================== OAuth Login (DISABLED - Not working) ====================
 
 # DISABLED: OAuth login not working properly - All routes commented out
+# 전체 OAuth 섹션을 주석 처리하여 서버 크래시 방지
 """
 # @router.get("/oauth/login")
 # async def naver_oauth_login(google_email: Optional[str] = None):
-    """
-    네이버 OAuth 로그인 시작
-    
-    EXE 방식을 대체하는 새로운 방법!
-    웹앱에서 버튼 클릭만으로 네이버 세션 생성
-    """
-    try:
-        import urllib.parse
-        
-        if not settings.naver_client_id:
-            raise HTTPException(
-                status_code=500,
-                detail="네이버 OAuth가 설정되지 않았습니다. NAVER_CLIENT_ID를 설정해주세요."
-            )
-        
-        # State 생성 (CSRF 방지 + Google email 포함)
-        import secrets
-        state = secrets.token_urlsafe(16)
-        
-        # State를 세션에 저장 (Google email과 함께)
-        # 임시로 MongoDB에 저장
-        if settings.use_mongodb and settings.mongodb_url:
-            from utils.db import get_db
-            db = get_db()
-            if db is not None:
-                db.oauth_states.insert_one({
-                    "_id": state,
-                    "google_email": google_email,
-                    "created_at": datetime.utcnow(),
-                    "expires_at": datetime.utcnow() + timedelta(minutes=10)
-                })
-                print(f"✅ OAuth state saved: {state}")
-        
-        # OAuth URL 생성
-        oauth_params = {
-            'response_type': 'code',
-            'client_id': settings.naver_client_id,
-            'redirect_uri': settings.naver_oauth_callback_url,
-            'state': state
-        }
-        oauth_url = f"https://nid.naver.com/oauth2.0/authorize?{urllib.parse.urlencode(oauth_params)}"
-        
-        print(f"🔗 OAuth URL generated: {oauth_url[:100]}...")
-        
-        return {
-            "oauth_url": oauth_url,
-            "state": state
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ OAuth login error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"OAuth 로그인 URL 생성 실패: {str(e)}")
-
-
+#     \"\"\"
+#     네이버 OAuth 로그인 시작
+#     
+#     EXE 방식을 대체하는 새로운 방법!
+#     웹앱에서 버튼 클릭만으로 네이버 세션 생성
+#     \"\"\"
+#     try:
+#         import urllib.parse
+#         
+#         if not settings.naver_client_id:
+#             raise HTTPException(
+#                 status_code=500,
+#                 detail="네이버 OAuth가 설정되지 않았습니다. NAVER_CLIENT_ID를 설정해주세요."
+#             )
+#         
+#         # State 생성 (CSRF 방지 + Google email 포함)
+#         import secrets
+#         state = secrets.token_urlsafe(16)
+#         
+#         # State를 세션에 저장 (Google email과 함께)
+#         # 임시로 MongoDB에 저장
+#         if settings.use_mongodb and settings.mongodb_url:
+#             from utils.db import get_db
+#             db = get_db()
+#             if db is not None:
+#                 db.oauth_states.insert_one({
+#                     "_id": state,
+#                     "google_email": google_email,
+#                     "created_at": datetime.utcnow(),
+#                     "expires_at": datetime.utcnow() + timedelta(minutes=10)
+#                 })
+#                 print(f"✅ OAuth state saved: {state}")
+#         
+#         # OAuth URL 생성
+#         oauth_params = {
+#             'response_type': 'code',
+#             'client_id': settings.naver_client_id,
+#             'redirect_uri': settings.naver_oauth_callback_url,
+#             'state': state
+#         }
+#         oauth_url = f"https://nid.naver.com/oauth2.0/authorize?{urllib.parse.urlencode(oauth_params)}"
+#         
+#         print(f"🔗 OAuth URL generated: {oauth_url[:100]}...")
+#         
+#         return {
+#             "oauth_url": oauth_url,
+#             "state": state
+#         }
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         print(f"❌ OAuth login error: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"OAuth 로그인 URL 생성 실패: {str(e)}")
+# 
+# 
 # @router.get("/oauth/callback")
 # async def naver_oauth_callback(
-    code: str,
-    state: str,
-    error: Optional[str] = None,
-    error_description: Optional[str] = None
-):
-    """
-    네이버 OAuth 콜백 처리
-    
-    로그인 완료 후 쿠키를 추출하여 MongoDB에 저장
-    """
-    try:
-        import urllib.parse
-        import requests as req
-        
-        # 에러 체크
-        if error:
-            print(f"❌ OAuth error: {error} - {error_description}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"OAuth 로그인 실패: {error_description or error}"
-            )
-        
-        # State 검증
-        from utils.db import get_db
-        db = get_db()
-        if db is not None:
-            oauth_state = db.oauth_states.find_one({"_id": state})
-            if not oauth_state:
-                raise HTTPException(status_code=400, detail="Invalid state")
-            
-            google_email = oauth_state.get('google_email')
-            
-            # State 삭제 (한 번만 사용)
-            db.oauth_states.delete_one({"_id": state})
-        else:
-            google_email = None
-        
-        print(f"✅ OAuth callback received - code: {code[:20]}...")
-        
-        # Access Token 교환
-        token_url = "https://nid.naver.com/oauth2.0/token"
-        token_data = {
-            "grant_type": "authorization_code",
-            "client_id": settings.naver_client_id,
-            "client_secret": settings.naver_client_secret,
-            "code": code,
-            "state": state
-        }
-        
-        token_response = req.post(token_url, data=token_data)
-        token_json = token_response.json()
-        
-        if "access_token" not in token_json:
-            error_msg = token_json.get('error_description', 'Token exchange failed')
-            raise HTTPException(status_code=400, detail=error_msg)
-        
-        access_token = token_json["access_token"]
-        refresh_token = token_json.get("refresh_token")
-        
-        print(f"✅ Access Token received: {access_token[:20]}...")
-        if refresh_token:
-            print(f"✅ Refresh Token received: {refresh_token[:20]}...")
-        
-        # 🚀 핵심: 사용자 프로필 조회 (네이버 ID 가져오기)
-        profile_url = "https://openapi.naver.com/v1/nid/me"
-        profile_response = req.get(
-            profile_url,
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        profile_json = profile_response.json()
-        
-        # 네이버 ID를 user_id로 사용
-        naver_id = profile_json.get('response', {}).get('id', 'unknown')
-        user_id = f"naver_{naver_id}"
-        
-        print(f"✅ Naver ID: {naver_id}")
-        
-        # 🚀 CRITICAL: 현재 브라우저가 이미 로그인되어 있음!
-        # 이 브라우저를 persistent manager에 등록
-        from services.persistent_browser_manager import browser_manager
-        from services.naver_automation_selenium import naver_automation_selenium
-        
-        # 새 브라우저 생성 (사용자가 방금 로그인한 세션 재현)
-        print("🌐 Creating persistent browser...")
-        
-        chrome_options = Options()
-        chrome_options.add_argument('--headless=new')  # Heroku는 headless 필수
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument('--window-size=1280,720')
-        
-        # Heroku 환경 확인
-        if os.environ.get('DYNO'):
-            chrome_base = '/app/.chrome-for-testing'
-            chrome_bin = f'{chrome_base}/chrome-linux64/chrome'
-            chromedriver_path = f'{chrome_base}/chromedriver-linux64/chromedriver'
-            chrome_options.binary_location = chrome_bin
-            service = Service(executable_path=chromedriver_path)
-        else:
-            service = Service(ChromeDriverManager().install())
-        
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        # 네이버에 접속하여 OAuth로 세션 생성
-        # 🔧 CRITICAL: OAuth token으로 쿠키 생성하는 방법
-        driver.get("https://www.naver.com")
-        time.sleep(1)
-        
-        # OAuth token을 쿠키로 변환 (네이버의 숨겨진 엔드포인트 사용)
-        # 또는 다시 로그인 페이지로 이동 (이미 인증됨)
-        driver.get(f"https://nid.naver.com/nidlogin.login?url=https://www.naver.com")
-        time.sleep(2)
-        
-        # 쿠키 추출
-        cookies = driver.get_cookies()
-        user_agent = driver.execute_script("return navigator.userAgent")
-        
-        print(f"✅ Extracted {len(cookies)} cookies from persistent browser")
-        
-        # 🚀 PERSISTENT: 브라우저를 닫지 않고 등록!
-        browser_manager.register_browser(user_id, driver, user_agent)
-        
-        # MongoDB에 세션 정보 저장 (백업용)
-        if db is not None:
-            session_doc = {
-                "_id": user_id,
-                "username": naver_id,
-                "google_emails": [google_email] if google_email else [],
-                "cookies": cookies,
-                "user_agent": user_agent,
-                "window_size": "1280,720",
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(days=30),  # 브라우저 유지 시 더 길게
-                "last_used": datetime.utcnow(),
-                "status": "active",
-                "cookie_count": len(cookies),
-                "auth_method": "oauth_persistent",  # Persistent browser 표시
-                "browser_active": True  # 브라우저가 백그라운드에 활성화됨
-            }
-            
-            db.naver_sessions.replace_one(
-                {"_id": user_id},
-                session_doc,
-                upsert=True
-            )
-            
-            print(f"✅ Session saved to MongoDB: {user_id}")
-        
-        # 프론트엔드로 리다이렉트
-        frontend_url = f"https://review-management-system-ivory.vercel.app/naver-login?success=true&user_id={user_id}"
-        
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=frontend_url)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ OAuth callback error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        # 에러 시 프론트엔드로 리다이렉트
-        error_url = f"https://review-management-system-ivory.vercel.app/naver-login?error={urllib.parse.quote(str(e))}"
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=error_url)
+#     code: str,
+#     state: str,
+#     error: Optional[str] = None,
+#     error_description: Optional[str] = None
+# ):
+#     \"\"\"
+#     네이버 OAuth 콜백 처리
+#     
+#     로그인 완료 후 쿠키를 추출하여 MongoDB에 저장
+#     \"\"\"
+#     try:
+#         import urllib.parse
+#         import requests as req
+#         
+#         # 에러 체크
+#         if error:
+#             print(f"❌ OAuth error: {error} - {error_description}")
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"OAuth 로그인 실패: {error_description or error}"
+#             )
+#         
+#         # State 검증
+#         from utils.db import get_db
+#         db = get_db()
+#         if db is not None:
+#             oauth_state = db.oauth_states.find_one({"_id": state})
+#             if not oauth_state:
+#                 raise HTTPException(status_code=400, detail="Invalid state")
+#             
+#             google_email = oauth_state.get('google_email')
+#             
+#             # State 삭제 (한 번만 사용)
+#             db.oauth_states.delete_one({"_id": state})
+#         else:
+#             google_email = None
+#         
+#         print(f"✅ OAuth callback received - code: {code[:20]}...")
+#         
+#         # Access Token 교환
+#         token_url = "https://nid.naver.com/oauth2.0/token"
+#         token_data = {
+#             "grant_type": "authorization_code",
+#             "client_id": settings.naver_client_id,
+#             "client_secret": settings.naver_client_secret,
+#             "code": code,
+#             "state": state
+#         }
+#         
+#         token_response = req.post(token_url, data=token_data)
+#         token_json = token_response.json()
+#         
+#         if "access_token" not in token_json:
+#             error_msg = token_json.get('error_description', 'Token exchange failed')
+#             raise HTTPException(status_code=400, detail=error_msg)
+#         
+#         access_token = token_json["access_token"]
+#         refresh_token = token_json.get("refresh_token")
+#         
+#         print(f"✅ Access Token received: {access_token[:20]}...")
+#         if refresh_token:
+#             print(f"✅ Refresh Token received: {refresh_token[:20]}...")
+#         
+#         # 🚀 핵심: 사용자 프로필 조회 (네이버 ID 가져오기)
+#         profile_url = "https://openapi.naver.com/v1/nid/me"
+#         profile_response = req.get(
+#             profile_url,
+#             headers={"Authorization": f"Bearer {access_token}"}
+#         )
+#         profile_json = profile_response.json()
+#         
+#         # 네이버 ID를 user_id로 사용
+#         naver_id = profile_json.get('response', {}).get('id', 'unknown')
+#         user_id = f"naver_{naver_id}"
+#         
+#         print(f"✅ Naver ID: {naver_id}")
+#         
+#         # 🚀 CRITICAL: 현재 브라우저가 이미 로그인되어 있음!
+#         # 이 브라우저를 persistent manager에 등록
+#         from services.persistent_browser_manager import browser_manager
+#         from services.naver_automation_selenium import naver_automation_selenium
+#         
+#         # 새 브라우저 생성 (사용자가 방금 로그인한 세션 재현)
+#         print("🌐 Creating persistent browser...")
+#         
+#         chrome_options = Options()
+#         chrome_options.add_argument('--headless=new')  # Heroku는 headless 필수
+#         chrome_options.add_argument('--no-sandbox')
+#         chrome_options.add_argument('--disable-dev-shm-usage')
+#         chrome_options.add_argument('--disable-gpu')
+#         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+#         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+#         chrome_options.add_experimental_option('useAutomationExtension', False)
+#         chrome_options.add_argument('--window-size=1280,720')
+#         
+#         # Heroku 환경 확인
+#         if os.environ.get('DYNO'):
+#             chrome_base = '/app/.chrome-for-testing'
+#             chrome_bin = f'{chrome_base}/chrome-linux64/chrome'
+#             chromedriver_path = f'{chrome_base}/chromedriver-linux64/chromedriver'
+#             chrome_options.binary_location = chrome_bin
+#             service = Service(executable_path=chromedriver_path)
+#         else:
+#             service = Service(ChromeDriverManager().install())
+#         
+#         driver = webdriver.Chrome(service=service, options=chrome_options)
+#         
+#         # 네이버에 접속하여 OAuth로 세션 생성
+#         # 🔧 CRITICAL: OAuth token으로 쿠키 생성하는 방법
+#         driver.get("https://www.naver.com")
+#         time.sleep(1)
+#         
+#         # OAuth token을 쿠키로 변환 (네이버의 숨겨진 엔드포인트 사용)
+#         # 또는 다시 로그인 페이지로 이동 (이미 인증됨)
+#         driver.get(f"https://nid.naver.com/nidlogin.login?url=https://www.naver.com")
+#         time.sleep(2)
+#         
+#         # 쿠키 추출
+#         cookies = driver.get_cookies()
+#         user_agent = driver.execute_script("return navigator.userAgent")
+#         
+#         print(f"✅ Extracted {len(cookies)} cookies from persistent browser")
+#         
+#         # 🚀 PERSISTENT: 브라우저를 닫지 않고 등록!
+#         browser_manager.register_browser(user_id, driver, user_agent)
+#         
+#         # MongoDB에 세션 정보 저장 (백업용)
+#         if db is not None:
+#             session_doc = {
+#                 "_id": user_id,
+#                 "username": naver_id,
+#                 "google_emails": [google_email] if google_email else [],
+#                 "cookies": cookies,
+#                 "user_agent": user_agent,
+#                 "window_size": "1280,720",
+#                 "access_token": access_token,
+#                 "refresh_token": refresh_token,
+#                 "created_at": datetime.utcnow(),
+#                 "expires_at": datetime.utcnow() + timedelta(days=30),  # 브라우저 유지 시 더 길게
+#                 "last_used": datetime.utcnow(),
+#                 "status": "active",
+#                 "cookie_count": len(cookies),
+#                 "auth_method": "oauth_persistent",  # Persistent browser 표시
+#                 "browser_active": True  # 브라우저가 백그라운드에 활성화됨
+#             }
+#             
+#             db.naver_sessions.replace_one(
+#                 {"_id": user_id},
+#                 session_doc,
+#                 upsert=True
+#             )
+#             
+#             print(f"✅ Session saved to MongoDB: {user_id}")
+#         
+#         # 프론트엔드로 리다이렉트
+#         frontend_url = f"https://review-management-system-ivory.vercel.app/naver-login?success=true&user_id={user_id}"
+#         
+#         from fastapi.responses import RedirectResponse
+#         return RedirectResponse(url=frontend_url)
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         print(f"❌ OAuth callback error: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         
+#         # 에러 시 프론트엔드로 리다이렉트
+#         error_url = f"https://review-management-system-ivory.vercel.app/naver-login?error={urllib.parse.quote(str(e))}"
+#         from fastapi.responses import RedirectResponse
+#         return RedirectResponse(url=error_url)
 """
